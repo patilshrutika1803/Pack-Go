@@ -1,0 +1,141 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap');
+
+/* ── Design Tokens ─────────────────────────────────────────────── */
+:root {
+  --bg:            #080c14;
+  --bg2:           #0d1220;
+  --surface:       #111827;
+  --surface2:      #1a2235;
+  --border:        rgba(108, 99, 255, 0.18);
+  --border-light:  rgba(255,255,255,0.06);
+  --primary:       #6c63ff;
+  --primary-glow:  rgba(108, 99, 255, 0.35);
+  --accent:        #00d4aa;
+  --accent-glow:   rgba(0, 212, 170, 0.3);
+  --danger:        #ff5e7a;
+  --warn:          #f5a623;
+  --text:          #e8eaf0;
+  --text-muted:    #8b92a9;
+  --text-dim:      #4a5168;
+  --radius:        14px;
+  --radius-lg:     20px;
+  --radius-full:   999px;
+  --shadow:        0 8px 32px rgba(0,0,0,0.45);
+  --shadow-glow:   0 0 40px rgba(108,99,255,0.15);
+  --gradient:      linear-gradient(135deg, #6c63ff 0%, #00d4aa 100%);
+  --gradient-warm: linear-gradient(135deg, #ff6b6b 0%, #f5a623 100%);
+}
+
+/* ── Reset ─────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Animated Background ───────────────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 10%, rgba(108,99,255,0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(0,212,170,0.08) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+/* ── Typography ────────────────────────────────────────────────── */
+h1, h2, h3 { font-family: 'Space Grotesk', sans-serif; }
+
+/* ── Glass Card ────────────────────────────────────────────────── */
+.glass {
+  background: rgba(17, 24, 39, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+}
+
+/* ── Gradient Text ─────────────────────────────────────────────── */
+.gradient-text {
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Animations ────────────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px var(--primary-glow); }
+  50%       { box-shadow: 0 0 40px var(--primary-glow), 0 0 60px rgba(108,99,255,0.15); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes dash {
+  from { stroke-dashoffset: 283; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-8px); }
+}
+
+@keyframes typewriter {
+  from { width: 0; }
+  to   { width: 100%; }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+/* ── Skeleton Loader ───────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface2) 50%, var(--surface) 75%);
+  background-size: 400px 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: var(--radius);
+}
+
+/* ── Utility classes ───────────────────────────────────────────── */
+.fade-in-up  { animation: fadeInUp 0.5s ease both; }
+.fade-in     { animation: fadeIn 0.4s ease both; }
+.slide-left  { animation: slideInLeft 0.4s ease both; }

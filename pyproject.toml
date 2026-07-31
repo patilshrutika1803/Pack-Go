@@ -1,0 +1,7 @@
+[project]
+name = "pack-go"
+version = "0.1.0"
+description = "AI-powered Multi-Agent Travel Planner using LangGraph, FastAPI, React and Groq/Gemini."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
