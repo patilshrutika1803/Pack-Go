@@ -1,9 +1,8 @@
 """
 FastAPI backend entry point with SSE streaming support.
 """
+import os
 import uuid
-import json
-import asyncio
 from typing import Optional
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse, JSONResponse, Response
@@ -13,17 +12,40 @@ from pydantic import BaseModel
 from agent.agentic_workflow import GraphBuilder, build_final_plan, validate_final_state
 from utils.streaming import format_sse_event
 from memory.long_term import LongTermMemory
-from models.schemas import TravelPlan
+from logger.logging import get_logger
+
+logger = get_logger(__name__)
+
+GENERIC_ERROR_MESSAGE = "Unable to generate the travel plan at this time. Please try again."
+DEFAULT_ALLOWED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
+def _get_allowed_origins() -> list[str]:
+    configured_origins = os.getenv("PACK_GO_ALLOWED_ORIGINS", "")
+    if configured_origins:
+        origins = [origin.strip() for origin in configured_origins.split(",") if origin.strip()]
+        return origins
+    return DEFAULT_ALLOWED_ORIGINS
+
 
 app = FastAPI(title="PACK & GO API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
+    allow_origins=_get_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request, exc: Exception):
+    logger.exception("Unhandled server error during %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"error": GENERIC_ERROR_MESSAGE},
+    )
 
 class PlanRequest(BaseModel):
     question: str
@@ -80,8 +102,9 @@ async def plan_trip_sync(request: PlanRequest):
             )
             
         return {"thread_id": thread_id, "state": "complete", "plan": build_final_plan(output)}
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+    except Exception as exc:
+        logger.exception("Unexpected error in /plan request")
+        return JSONResponse(status_code=500, content={"error": GENERIC_ERROR_MESSAGE})
 
 @app.get("/graph")
 async def get_graph_png():
@@ -91,8 +114,9 @@ async def get_graph_png():
         graph = graph_builder.build_graph()
         png_data = graph.get_graph().draw_mermaid_png()
         return Response(content=png_data, media_type="image/png")
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": f"Failed to generate graph: {e}"})
+    except Exception as exc:
+        logger.exception("Unexpected error generating graph PNG")
+        return JSONResponse(status_code=500, content={"error": GENERIC_ERROR_MESSAGE})
 
 @app.post("/plan/stream")
 async def plan_trip_stream(request: PlanRequest):
@@ -171,7 +195,8 @@ async def plan_trip_stream(request: PlanRequest):
             else:
                 yield format_sse_event("error", "System", "Failed to generate plan.")
                 
-        except Exception as e:
-            yield format_sse_event("error", "System", str(e))
+        except Exception as exc:
+            logger.exception("Unexpected error in /plan/stream request for thread_id=%s", thread_id)
+            yield format_sse_event("error", "System", GENERIC_ERROR_MESSAGE)
             
     return StreamingResponse(event_generator(), media_type="text/event-stream")

@@ -74,5 +74,5 @@ htmlcov/
 # LangGraph / AI (optional)
 # Uncomment if generated automatically
 # ----------------------------
-# chroma_db/
+chroma_db/
 # memory/

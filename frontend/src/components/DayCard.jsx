@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import PlaceDetailModal from './PlaceDetailModal'
+import { formatCurrency } from '../utils/currency'
 import './DayCard.css'
 
 const DAY_THEMES = [
@@ -9,7 +10,7 @@ const DAY_THEMES = [
   'linear-gradient(135deg, #f5a62320, #ff6b6b10)',
 ]
 
-export default function DayCard({ day, index }) {
+export default function DayCard({ day, index, currency }) {
   const [open, setOpen] = useState(true)
   const [selectedPlace, setSelectedPlace] = useState(null)
 
@@ -80,7 +81,7 @@ export default function DayCard({ day, index }) {
           </div>
         </div>
         <div className="day-header-right">
-          <span className="day-cost">₹{calculatedTotal.toLocaleString()}</span>
+          <span className="day-cost">{formatCurrency(calculatedTotal, currency)}</span>
           <span className={`chevron ${open ? 'open' : ''}`}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
               <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>

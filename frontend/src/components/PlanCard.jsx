@@ -1,9 +1,11 @@
 import DayCard from './DayCard'
 import CriticScore from './CriticScore'
+import { formatCurrency, resolveCurrency } from '../utils/currency'
 import './PlanCard.css'
 
 export default function PlanCard({ plan }) {
   const { itinerary = [], budget, critic_review, weather, preferences } = plan
+  const budgetCurrency = resolveCurrency(plan)
 
   const conditionEmoji = (c = '') => {
     const l = c.toLowerCase()
@@ -44,7 +46,7 @@ export default function PlanCard({ plan }) {
           <div className="plan-budget-pill">
             <span className="budget-pill-label">Total Cost</span>
             <span className="budget-pill-value">
-              ₹{budget.total_estimated?.toLocaleString()}
+              {formatCurrency(budget.total_estimated, budgetCurrency)}
             </span>
             <span className={`budget-status ${budget.is_within_budget ? 'within' : 'over'}`}>
               {budget.is_within_budget ? '✓ Within budget' : '⚠ Over budget'}
@@ -65,7 +67,7 @@ export default function PlanCard({ plan }) {
           </div>
         ) : (
           itinerary.map((day, i) => (
-            <DayCard key={day.day_number} day={day} index={i} />
+            <DayCard key={day.day_number} day={day} index={i} currency={budgetCurrency} />
           ))
         )}
       </div>

@@ -4,6 +4,7 @@ import ChatInput from './components/ChatInput'
 import MessageBubble from './components/MessageBubble'
 import PlanCard from './components/PlanCard'
 import HeroSection from './components/HeroSection'
+import { formatCurrency, resolveCurrency } from './utils/currency'
 import './App.css'
 
 const AGENT_ORDER = [
@@ -101,6 +102,7 @@ export default function App() {
   }
 
   const hasConversation = messages.length > 0
+  const budgetCurrency = resolveCurrency(plan)
 
   return (
     <div className="app-shell">
@@ -131,8 +133,8 @@ export default function App() {
               />
             </div>
             <div className="budget-bar-values">
-              <span>₹{plan.budget.total_estimated?.toLocaleString()}</span>
-              <span className="text-muted">/ ₹{plan.preferences?.total_budget?.toLocaleString()}</span>
+              <span>{formatCurrency(plan.budget.total_estimated, budgetCurrency)}</span>
+              <span className="text-muted">/ {formatCurrency(plan.preferences?.total_budget, budgetCurrency)}</span>
             </div>
           </div>
         )}
