@@ -3,7 +3,7 @@ Weather Agent for fetching live weather or seasonal fallbacks.
 """
 from typing import Dict, Any
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
-from utils.llm_loader import invoke_with_fallback
+from utils.llm_loader import build_structured_output, invoke_with_fallback
 from prompt_library.weather_prompt import SYSTEM_PROMPT
 from models.schemas import WeatherInfo
 from tools.weather_info_tool import WeatherInfoTool
@@ -16,10 +16,14 @@ def weather_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     
     preferences = state.get("preferences")
     if not preferences:
-        return {"weather_info": None}
+        return {
+            "weather_info": None,
+            "failed_agents": ["WeatherAgent"],
+            "failure_reasons": {"WeatherAgent": "Preferences are unavailable."},
+        }
     
     def build_chain(llm):
-        return llm.with_structured_output(WeatherInfo)
+        return build_structured_output(llm, WeatherInfo)
     
     weather_tools = WeatherInfoTool().weather_tool_list
     
@@ -48,4 +52,6 @@ def weather_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
             travel_warnings=[],
             data_source="llm_fallback",
             fallback_used=True
-        ), "completed_agents": ["WeatherAgent"]}
+        ), "failed_agents": ["WeatherAgent"],
+            "failure_reasons": {"WeatherAgent": str(e)},
+        }

@@ -4,8 +4,14 @@ Defines all structured inputs and outputs for the agents.
 """
 
 from pydantic import BaseModel, Field, field_validator
-from typing import List, Optional, Dict, Union
+from typing import List, Optional, Dict, Union, Literal
 from datetime import datetime
+
+class SupervisorDecision(BaseModel):
+    """Structured intent classification for the workflow entry point."""
+    intent: Literal["plan_trip", "general_chat"] = Field(
+        description="The user's intent: plan_trip or general_chat."
+    )
 
 class UserPreferences(BaseModel):
     """Structured preferences extracted from the user's raw query."""

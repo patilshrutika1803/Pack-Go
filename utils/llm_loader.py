@@ -1,4 +1,5 @@
 import os
+import re
 from typing import Any
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
@@ -12,17 +13,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(dotenv_path=BASE_DIR / ".env")
 logger = get_logger(__name__)
 
+def build_structured_output(llm, schema):
+    """Build structured output with the protocol supported by each provider."""
+    if isinstance(llm, ChatGroq):
+        return llm.with_structured_output(schema, method="json_schema")
+    return llm.with_structured_output(schema)
+
 def get_primary_llm():
     groq_api_key = os.getenv("GROQ_API_KEY")
     if not groq_api_key:
         logger.warning("GROQ_API_KEY is not set.")
-    return ChatGroq(model="llama-3.3-70b-versatile", api_key=groq_api_key, temperature=0.0)
+    return ChatGroq(model="openai/gpt-oss-120b", api_key=groq_api_key, temperature=0.0)
 
 def get_fallback_llm():
     google_api_key = os.getenv("GOOGLE_API_KEY")
     if not google_api_key:
         logger.warning("GOOGLE_API_KEY is not set.")
-    return ChatGoogleGenerativeAI(model="gemini-2.0-flash", api_key=google_api_key, temperature=0.0)
+    return ChatGoogleGenerativeAI(model="gemini-3.5-flash", api_key=google_api_key, temperature=0.0)
 
 def _sanitize_messages(args: tuple) -> tuple:
     """
@@ -47,10 +54,28 @@ def _sanitize_messages(args: tuple) -> tuple:
         return (cleaned,) + args[1:]
     return args
 
+def _safe_exception_message(exception: Exception) -> str:
+    message = str(exception)
+    for environment_name in ("GROQ_API_KEY", "GOOGLE_API_KEY"):
+        secret = os.getenv(environment_name)
+        if secret:
+            message = message.replace(secret, "[REDACTED]")
+    message = re.sub(
+        r"(?i)(authorization\s*[:=]\s*bearer\s+)[^\s,;]+",
+        r"\1[REDACTED]",
+        message,
+    )
+    return re.sub(
+        r"(?i)((?:api[_ -]?key|token|secret|password)\s*[:=]\s*)[\"']?[^\"'\s,}]+",
+        r"\1[REDACTED]",
+        message,
+    )
+
 def invoke_with_fallback(chain_builder, *args, **kwargs):
     """
     Tries to build and invoke the chain with the primary Groq LLM.
-    If a 429 rate limit error occurs, it builds and invokes the chain with Gemini instead.
+    If Groq is rate-limited or its configured model is unavailable, it builds and
+    invokes the chain with Gemini instead.
     Empty HumanMessages are stripped before the Gemini call to avoid 'contents are required'.
 
     chain_builder is a function that takes an LLM instance and returns a runnable chain
@@ -62,8 +87,31 @@ def invoke_with_fallback(chain_builder, *args, **kwargs):
         return chain.invoke(*args, **kwargs)
     except Exception as e:
         error_msg = str(e).lower()
-        if '429' in error_msg or 'rate limit' in error_msg or 'rate_limit' in error_msg:
-            logger.warning('Groq rate limit hit, switching to Gemini fallback')
+        fallback_errors = (
+            '429',
+            'rate limit',
+            'rate_limit',
+            'model_not_found',
+            '404',
+            'model does not exist',
+            'model not found',
+            'access to the model is unavailable',
+            'tool_use_failed',
+            'tool call validation failed',
+            'tool choice is none',
+        )
+        matched_indicator = next(
+            (error_indicator for error_indicator in fallback_errors if error_indicator in error_msg),
+            None,
+        )
+        if matched_indicator is not None:
+            logger.warning(
+                "Groq primary call failed; switching to Gemini fallback "
+                "reason=%s exception_type=%s exception_message=%s",
+                matched_indicator,
+                type(e).__name__,
+                _safe_exception_message(e),
+            )
             try:
                 fallback_llm = get_fallback_llm()
                 fallback_chain = chain_builder(fallback_llm)
@@ -71,8 +119,17 @@ def invoke_with_fallback(chain_builder, *args, **kwargs):
                 clean_args = _sanitize_messages(args)
                 return fallback_chain.invoke(*clean_args, **kwargs)
             except Exception as fallback_e:
-                logger.error(f"Fallback to Gemini also failed: {fallback_e}")
-                raise fallback_e
-        logger.error(f"Primary LLM failed with non-rate-limit error: {e}")
+                logger.error(
+                    "Gemini fallback failed exception_type=%s exception_message=%s",
+                    type(fallback_e).__name__,
+                    _safe_exception_message(fallback_e),
+                )
+                raise fallback_e from e
+        logger.error(
+            "Primary LLM failed with non-rate-limit error "
+            "exception_type=%s exception_message=%s",
+            type(e).__name__,
+            _safe_exception_message(e),
+        )
         raise e
 

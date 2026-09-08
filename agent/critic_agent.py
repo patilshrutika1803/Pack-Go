@@ -5,7 +5,7 @@ Ensures logical flow, budget adherence, weather safety, and user preferences.
 import json
 from typing import Dict, Any
 from langchain_core.messages import SystemMessage, HumanMessage
-from utils.llm_loader import invoke_with_fallback
+from utils.llm_loader import build_structured_output, invoke_with_fallback
 from prompt_library.critic_prompt import SYSTEM_PROMPT
 from models.schemas import CriticReview
 from logger.logging import get_logger
@@ -25,23 +25,29 @@ def critic_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     weather = state.get("weather_info")
     
     if not preferences:
-        return {"critic_review": None}
+        return {
+            "critic_review": None,
+            "failed_agents": ["CriticAgent"],
+            "failure_reasons": {"CriticAgent": "Preferences are unavailable."},
+        }
         
-    if not itinerary:
+    if not itinerary or "ItineraryAgent" in state.get("failed_agents", []):
         logger.warning("No itinerary found to critique.")
-        return {"critic_review": CriticReview(
-            overall_score=0.0,
-            requires_revision=False,   # Don't loop — itinerary generation itself failed
-            logical_flow_score=0,
-            budget_alignment_score=0,
-            weather_suitability_score=0,
-            preference_match_score=0,
-            warnings=["ItineraryAgent failed to generate an itinerary. Please try again."],
-            revision_instructions=[]
-        ), "completed_agents": ["CriticAgent"]}
+        return {
+            "critic_review": None,
+            "failed_agents": ["CriticAgent"],
+            "failure_reasons": {"CriticAgent": "Itinerary is empty or invalid."},
+        }
+
+    if "BudgetAgent" in state.get("failed_agents", []) or not budget:
+        return {
+            "critic_review": None,
+            "failed_agents": ["CriticAgent"],
+            "failure_reasons": {"CriticAgent": "Budget is unavailable."},
+        }
     
     def build_chain(llm):
-        return llm.with_structured_output(CriticReview)
+        return build_structured_output(llm, CriticReview)
         
     # Prepare payload for critique
     content = "Please evaluate the following travel plan:\n\n"
@@ -73,13 +79,8 @@ def critic_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         
     except Exception as e:
         logger.error(f"CriticAgent failed: {e}")
-        # Default to passing if critic fails, to avoid infinite loops
-        return {"critic_review": CriticReview(
-            overall_score=7.5,
-            requires_revision=False,
-            logical_flow_score=8,
-            budget_alignment_score=8,
-            weather_suitability_score=8,
-            preference_match_score=8,
-            warnings=["Critic agent encountered an error. Validation bypassed."]
-        ), "completed_agents": ["CriticAgent"]}
+        return {
+            "critic_review": None,
+            "failed_agents": ["CriticAgent"],
+            "failure_reasons": {"CriticAgent": str(e)},
+        }

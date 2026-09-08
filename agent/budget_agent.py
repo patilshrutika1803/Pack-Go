@@ -4,7 +4,7 @@ Uses the expense calculator and currency conversion tools to ensure exact numeri
 """
 from typing import Dict, Any
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
-from utils.llm_loader import invoke_with_fallback
+from utils.llm_loader import build_structured_output, invoke_with_fallback
 from prompt_library.budget_prompt import SYSTEM_PROMPT
 from models.schemas import BudgetBreakdown
 from tools.expense_calculator_tool import CalculatorTool
@@ -24,7 +24,11 @@ def budget_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     preferences = state.get("preferences")
     if not preferences:
         logger.warning("No preferences found in state. Skipping budget calculation.")
-        return {"budget_breakdown": None}
+        return {
+            "budget_breakdown": None,
+            "failed_agents": ["BudgetAgent"],
+            "failure_reasons": {"BudgetAgent": "Preferences are unavailable."},
+        }
     
     # Initialize Tools
     calc_tools = CalculatorTool()
@@ -52,12 +56,13 @@ def budget_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         return llm.bind_tools(tools)
         
     def build_structured_chain(llm):
-        return llm.with_structured_output(BudgetBreakdown)
+        return build_structured_output(llm, BudgetBreakdown)
     
     try:
         # Step 1: Tool calling phase
         response_msg = invoke_with_fallback(build_tool_chain, messages)
         messages.append(response_msg)
+        tool_results = []
         
         # Execute tool calls
         tool_map = {t.name: t for t in tools}
@@ -68,10 +73,22 @@ def budget_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 if tool_name in tool_map:
                     logger.info(f"BudgetAgent executing tool: {tool_name} with args {tool_args}")
                     tool_result = tool_map[tool_name].invoke(tool_args)
+                    tool_results.append(f"{tool_name}: {tool_result}")
                     messages.append(ToolMessage(content=str(tool_result), tool_call_id=tool_call["id"]))
         
             # Step 2: Generation phase (Parse to Pydantic)
-            final_response = invoke_with_fallback(build_structured_chain, messages)
+            final_messages = [
+                system_message,
+                HumanMessage(
+                    content=(
+                        f"{human_content}\n\n"
+                        f"Tool results:\n{chr(10).join(tool_results)}\n\n"
+                        "Using these results, return only the final BudgetBreakdown object. "
+                        "Do not call any tools."
+                    )
+                ),
+            ]
+            final_response = invoke_with_fallback(build_structured_chain, final_messages)
         else:
             # It didn't call tools, just parse its content into Pydantic
             final_response = invoke_with_fallback(build_structured_chain, messages)
@@ -81,11 +98,8 @@ def budget_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         
     except Exception as e:
         logger.error(f"BudgetAgent failed: {e}")
-        # Return fallback
-        return {"budget_breakdown": BudgetBreakdown(
-            total_estimated=0.0,
-            currency=preferences.budget_currency if preferences else "USD",
-            categories=[],
-            is_within_budget=True,
-            adjustment_suggestions=["Error calculating budget. Please verify manually."]
-        ), "completed_agents": ["BudgetAgent"]}
+        return {
+            "budget_breakdown": None,
+            "failed_agents": ["BudgetAgent"],
+            "failure_reasons": {"BudgetAgent": str(e)},
+        }

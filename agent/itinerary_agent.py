@@ -29,12 +29,30 @@ def itinerary_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     preferences = state.get("preferences")
     if not preferences:
         logger.warning("No preferences found. Returning empty itinerary.")
-        return {"itinerary": [], "completed_agents": ["ItineraryAgent"]}
+        return {
+            "itinerary": None,
+            "failed_agents": ["ItineraryAgent"],
+            "failure_reasons": {"ItineraryAgent": "Preferences are unavailable."},
+        }
 
     weather = state.get("weather_info")
     budget = state.get("budget_breakdown")
     research_data = state.get("research_data", {})
     critic_review = state.get("critic_review")
+
+    failed_agents = set(state.get("failed_agents", []))
+    if "BudgetAgent" in failed_agents or not budget:
+        return {
+            "itinerary": None,
+            "failed_agents": ["ItineraryAgent"],
+            "failure_reasons": {"ItineraryAgent": "BudgetAgent did not produce a valid budget."},
+        }
+    if "ResearchAgent" in failed_agents or not research_data or not research_data.get("places"):
+        return {
+            "itinerary": None,
+            "failed_agents": ["ItineraryAgent"],
+            "failure_reasons": {"ItineraryAgent": "Research data is unavailable."},
+        }
 
     # ── Compact context (Fix 3: token-efficient summarizer) ────────────────────
     context_summary = summarize_for_itinerary(research_data, weather, budget)
@@ -70,4 +88,8 @@ def itinerary_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     except Exception as e:
         logger.error(f"ItineraryAgent failed: {e}")
-        return {"itinerary": [], "failed_agents": ["ItineraryAgent"]}
+        return {
+            "itinerary": None,
+            "failed_agents": ["ItineraryAgent"],
+            "failure_reasons": {"ItineraryAgent": str(e)},
+        }

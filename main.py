@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from agent.agentic_workflow import GraphBuilder
+from agent.agentic_workflow import GraphBuilder, build_final_plan, validate_final_state
 from utils.streaming import format_sse_event
 from memory.long_term import LongTermMemory
 from models.schemas import TravelPlan
@@ -43,6 +43,27 @@ async def plan_trip_sync(request: PlanRequest):
         
         # We invoke the graph
         output = graph.invoke({"messages": [request.question]}, config=config)
+
+        if output.get("intent") == "general_chat":
+            return {
+                "thread_id": thread_id,
+                "state": "complete",
+                "intent": "general_chat",
+                "response": output.get("chat_response", ""),
+                "chat_response": output.get("chat_response", ""),
+            }
+
+        validation_errors = validate_final_state(output)
+        if validation_errors:
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "error": "Workflow failed validation.",
+                    "details": validation_errors,
+                    "failed_agents": output.get("failed_agents", []),
+                    "failure_reasons": output.get("failure_reasons", {}),
+                },
+            )
         
         # Save to long term memory if requested
         if request.remember_me and "preferences" in output and output["preferences"]:
@@ -58,7 +79,7 @@ async def plan_trip_sync(request: PlanRequest):
                 duration=pref.duration
             )
             
-        return {"thread_id": thread_id, "state": "complete"}
+        return {"thread_id": thread_id, "state": "complete", "plan": build_final_plan(output)}
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
@@ -108,18 +129,45 @@ async def plan_trip_stream(request: PlanRequest):
                     duration=pref.duration
                 )
             
-            # Compile TravelPlan
             if final_state:
-                plan = TravelPlan(
-                    preferences=final_state.get("preferences"),
-                    weather=final_state.get("weather_info"),
-                    budget=final_state.get("budget_breakdown"),
-                    itinerary=final_state.get("itinerary", []),
-                    critic_review=final_state.get("critic_review"),
-                    revision_history=final_state.get("revision_history", []),
-                    data_freshness={"source": "mixed"}
-                )
-                yield format_sse_event("done", "System", "Workflow complete.", data=plan)
+                if final_state.get("intent") == "general_chat":
+                    chat_errors = validate_final_state(final_state)
+                    if chat_errors:
+                        yield format_sse_event(
+                            "error",
+                            "System",
+                            "Workflow failed validation.",
+                            data={"details": chat_errors},
+                        )
+                        return
+                    yield format_sse_event(
+                        "done",
+                        "System",
+                        "Chat response complete.",
+                        data={
+                            "intent": "general_chat",
+                            "response": final_state.get("chat_response", ""),
+                            "chat_response": final_state.get("chat_response", ""),
+                        },
+                    )
+                    return
+
+                validation_errors = validate_final_state(final_state)
+                if validation_errors:
+                    yield format_sse_event(
+                        "error",
+                        "System",
+                        "Workflow failed validation.",
+                        data={
+                            "details": validation_errors,
+                            "failed_agents": final_state.get("failed_agents", []),
+                            "failure_reasons": final_state.get("failure_reasons", {}),
+                        },
+                    )
+                else:
+                    yield format_sse_event(
+                        "done", "System", "Workflow complete.", data=build_final_plan(final_state)
+                    )
             else:
                 yield format_sse_event("error", "System", "Failed to generate plan.")
                 

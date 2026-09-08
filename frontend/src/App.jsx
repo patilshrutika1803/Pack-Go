@@ -83,7 +83,6 @@ export default function App() {
 
             if (status === 'done') {
               setCurrentAgent(null)
-              setAgents(AGENT_ORDER)
               setPlan(data)
               setLoading(false)
             }
@@ -169,7 +168,11 @@ export default function App() {
 
               {plan && !loading && (
                 <div className="fade-in-up">
-                  <PlanCard plan={plan} />
+                  {plan.intent === 'general_chat' ? (
+                    <MessageBubble message={{ role: 'assistant', content: plan.response, id: `response-${Date.now()}` }} />
+                  ) : (
+                    <PlanCard plan={plan} />
+                  )}
                 </div>
               )}
 

@@ -1,24 +1,18 @@
-"""
-Supervisor agent — single-pass, runs ONCE at workflow start.
-
-In the new linear pipeline the Supervisor does NOT route between agents.
-Its only job is to extract the user's query from the messages list
-and store it in state so downstream agents can read it via state['query'].
-"""
+"""Supervisor intent classification and query initialization."""
 from typing import Dict, Any, List
 from langchain_core.messages import HumanMessage
+from langchain_core.messages import SystemMessage
 from logger.logging import get_logger
+from models.schemas import SupervisorDecision
+from prompt_library.supervisor_prompt import SYSTEM_PROMPT
+from utils.llm_loader import build_structured_output, invoke_with_fallback
 
 logger = get_logger(__name__)
 
 
 def supervisor_node(state: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Extracts the user query from state['messages'] and stores it as state['query'].
-    Returns immediately — no LLM call, no routing decision.
-    The fixed pipeline handles sequencing: Supervisor → PE → Research → Weather → Budget → Itinerary → Critic.
-    """
-    logger.info("Supervisor: initializing workflow, extracting user query.")
+    """Extract the query and classify it with structured LLM output."""
+    logger.info("Supervisor: extracting query and classifying intent.")
 
     # Pull query from messages list (most recent HumanMessage)
     query = state.get("query", "").strip()
@@ -35,4 +29,16 @@ def supervisor_node(state: Dict[str, Any]) -> Dict[str, Any]:
         logger.warning("Supervisor: no query found in state or messages.")
 
     logger.info(f"Supervisor: query = '{query[:80]}{'...' if len(query) > 80 else ''}'")
-    return {"query": query}
+
+    try:
+        decision = invoke_with_fallback(
+            lambda llm: build_structured_output(llm, SupervisorDecision),
+            [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=query)],
+        )
+        intent = decision.intent if hasattr(decision, "intent") else decision["intent"]
+    except Exception as exc:
+        logger.error("Supervisor intent classification failed: %s", exc)
+        intent = "plan_trip"
+
+    logger.info("Supervisor: intent = '%s'", intent)
+    return {"query": query, "intent": intent, "completed_agents": ["Supervisor"]}

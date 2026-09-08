@@ -63,7 +63,7 @@ graph TD
 - **Frontend:** React, Vite, Server-Sent Events (SSE)
 - **Backend Core:** FastAPI, Uvicorn, Python 3.11+
 - **AI & Orchestration:** LangChain, LangGraph
-- **Language Models:** Groq (`llama-3.3-70b-versatile`) as Primary, Google Generative AI (`gemini-2.0-flash`) as Fallback
+- **Language Models:** Groq (`openai/gpt-oss-120b`) as Primary, Google Generative AI (`gemini-3.5-flash`) as Fallback
 - **Memory & State:** ChromaDB (Vector Store), LangGraph `MemorySaver`
 - **External Tools:** Tavily Search API, OpenWeatherMap API, API Ninjas Exchange Rate
 
