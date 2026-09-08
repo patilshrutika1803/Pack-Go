@@ -1,7 +1,11 @@
+import logging
+
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
 from agent import agentic_workflow as workflow_module
+from memory.short_term import CHECKPOINT_ALLOWED_TYPES
 from models.schemas import (
     AttractionVisit,
     BudgetBreakdown,
@@ -10,7 +14,9 @@ from models.schemas import (
     Hotel,
     MealInfo,
     Place,
+    RevisionRecord,
     Transport,
+    TravelPlan,
     UserPreferences,
     WeatherInfo,
 )
@@ -197,3 +203,70 @@ def test_revision_loop_keeps_existing_three_iteration_limit(monkeypatch):
     }
     assert workflow_module.reflection_router(state) == "ItineraryAgent"
     assert workflow_module.reflection_router({**state, "iteration_count": 3}) == "__end__"
+
+
+def test_checkpoint_round_trip_preserves_pydantic_model_types(monkeypatch, caplog):
+    saver = MemorySaver(
+        serde=JsonPlusSerializer(allowed_msgpack_modules=CHECKPOINT_ALLOWED_TYPES)
+    )
+    monkeypatch.setattr(
+        workflow_module,
+        "get_checkpointer",
+        lambda: saver,
+    )
+
+    def supervisor(state):
+        return {"query": state["messages"][0].content, "intent": "plan_trip"}
+
+    def preferences(state):
+        return {"preferences": _preferences()}
+
+    def research(state):
+        return {"research_data": {"places": [{"name": "City Palace"}], "restaurants": []}}
+
+    def weather_node(state):
+        return {"weather_info": _weather()}
+
+    def budget_node(state):
+        return {"budget_breakdown": _budget()}
+
+    def itinerary_node(state):
+        return {"itinerary": [_day_plan()]}
+
+    def critic_node(state):
+        return {"critic_review": _review()}
+
+    monkeypatch.setattr(workflow_module, "supervisor_node", supervisor)
+    monkeypatch.setattr(workflow_module, "preference_extractor_node", preferences)
+    monkeypatch.setattr(workflow_module, "research_agent_node", research)
+    monkeypatch.setattr(workflow_module, "weather_agent_node", weather_node)
+    monkeypatch.setattr(workflow_module, "budget_agent_node", budget_node)
+    monkeypatch.setattr(workflow_module, "itinerary_agent_node", itinerary_node)
+    monkeypatch.setattr(workflow_module, "critic_agent_node", critic_node)
+
+    graph = workflow_module.GraphBuilder().build_graph()
+    config = {"configurable": {"thread_id": "checkpoint-roundtrip"}}
+
+    caplog.set_level(logging.WARNING, logger="langgraph.checkpoint.serde.jsonplus")
+    caplog.clear()
+
+    result = graph.invoke(
+        {"messages": [HumanMessage(content="Plan a trip")]},
+        config=config,
+    )
+
+    checkpoint = saver.get(config)
+    restored = checkpoint["channel_values"]
+
+    assert isinstance(result["preferences"], UserPreferences)
+    assert isinstance(result["weather_info"], WeatherInfo)
+    assert isinstance(result["budget_breakdown"], BudgetBreakdown)
+    assert isinstance(result["itinerary"][0], DayPlan)
+    assert isinstance(result["critic_review"], CriticReview)
+    assert isinstance(restored["preferences"], UserPreferences)
+    assert isinstance(restored["weather_info"], WeatherInfo)
+    assert isinstance(restored["budget_breakdown"], BudgetBreakdown)
+    assert isinstance(restored["itinerary"][0], DayPlan)
+    assert isinstance(restored["critic_review"], CriticReview)
+    assert restored["preferences"].destination == "Udaipur"
+    assert "Deserializing unregistered type" not in "\n".join(caplog.messages)

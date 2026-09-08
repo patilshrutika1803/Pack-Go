@@ -4,7 +4,7 @@ Extracts structured travel preferences from the user's natural language query.
 """
 from typing import Dict, Any
 from langchain_core.messages import SystemMessage, HumanMessage
-from utils.llm_loader import invoke_with_fallback
+from utils.llm_loader import build_structured_output, invoke_with_fallback
 from prompt_library.preference_prompt import SYSTEM_PROMPT
 from models.schemas import UserPreferences
 from memory.long_term import LongTermMemory
@@ -51,7 +51,7 @@ def preference_extractor_node(state: Dict[str, Any]) -> Dict[str, Any]:
     ]
 
     def build_chain(llm):
-        return llm.with_structured_output(UserPreferences)
+        return build_structured_output(llm, UserPreferences)
 
     try:
         # Step 2: Extract preferences

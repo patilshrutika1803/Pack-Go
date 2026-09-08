@@ -6,7 +6,7 @@ reducing token usage significantly vs. passing full JSON blobs.
 from typing import Dict, Any, List
 from langchain_core.messages import SystemMessage, HumanMessage
 from pydantic import BaseModel, Field
-from utils.llm_loader import invoke_with_fallback
+from utils.llm_loader import build_structured_output, invoke_with_fallback
 from utils.context_summarizer import summarize_for_itinerary
 from prompt_library.itinerary_prompt import SYSTEM_PROMPT
 from models.schemas import DayPlan
@@ -72,7 +72,7 @@ def itinerary_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         content += "\n".join(f"- {instr}" for instr in critic_review.revision_instructions)
 
     def build_chain(llm):
-        return llm.with_structured_output(ItineraryOutput)
+        return build_structured_output(llm, ItineraryOutput)
 
     try:
         messages = [

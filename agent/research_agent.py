@@ -4,7 +4,7 @@ Research Agent for finding places and restaurants.
 import json
 from typing import Dict, Any, List
 from langchain_core.messages import SystemMessage, HumanMessage
-from utils.llm_loader import invoke_with_fallback
+from utils.llm_loader import build_structured_output, invoke_with_fallback
 from prompt_library.research_prompt import SYSTEM_PROMPT
 from models.schemas import Place, Restaurant
 from pydantic import BaseModel, Field
@@ -33,7 +33,7 @@ def research_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     def build_chain(llm):
         # PlaceSearchTool exposes tools via .place_search_tool_list (not .place_tool_list)
         search_tools = PlaceSearchTool().place_search_tool_list
-        return llm.bind_tools(search_tools).with_structured_output(ResearchOutput)
+        return build_structured_output(llm.bind_tools(search_tools), ResearchOutput)
         
     human_content = (
         f"Destination: {preferences.destination}\n"

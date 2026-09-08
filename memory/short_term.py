@@ -4,10 +4,31 @@ Handles conversation and agent state persistence across sessions using LangGraph
 """
 import uuid
 from typing import Dict, Any, Optional
+
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
 from logger.logging import get_logger
 
 logger = get_logger(__name__)
+
+CHECKPOINT_ALLOWED_TYPES = [
+    ("models.schemas", "SupervisorDecision"),
+    ("models.schemas", "UserPreferences"),
+    ("models.schemas", "Place"),
+    ("models.schemas", "Restaurant"),
+    ("models.schemas", "Hotel"),
+    ("models.schemas", "WeatherInfo"),
+    ("models.schemas", "CategoryCost"),
+    ("models.schemas", "BudgetBreakdown"),
+    ("models.schemas", "MealInfo"),
+    ("models.schemas", "AttractionVisit"),
+    ("models.schemas", "Transport"),
+    ("models.schemas", "DayPlan"),
+    ("models.schemas", "CriticReview"),
+    ("models.schemas", "RevisionRecord"),
+    ("models.schemas", "TravelPlan"),
+]
 
 class ShortTermMemoryManager:
     """
@@ -22,7 +43,9 @@ class ShortTermMemoryManager:
         For a production multi-node environment, this should be backed by RedisSaver or PostgresSaver,
         but we use MemorySaver for local state persistence across async requests.
         """
-        self.checkpointer = MemorySaver()
+        self.checkpointer = MemorySaver(
+            serde=JsonPlusSerializer(allowed_msgpack_modules=CHECKPOINT_ALLOWED_TYPES)
+        )
         logger.info("Initialized LangGraph MemorySaver for short-term session state.")
         
     def get_checkpointer(self) -> MemorySaver:
