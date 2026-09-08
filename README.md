@@ -22,7 +22,7 @@ By coordinating a deterministic team of specialized AI agents built on **LangGra
 ## 2. Key Features
 
 - **Agentic Architecture (LangGraph):** A single-pass, deterministic sequence of specialized agents to maximize token efficiency and prevent infinite LLM loops.
-- **Robust LLM Fallback Mechanism:** Custom `FallbackLLMWrapper` automatically intercepts rate limit errors (e.g., Groq 429s) and re-routes exactly to Google Gemini 2.0 Flash without dropping the user's context.
+- **Robust LLM Fallback Mechanism:** Custom `FallbackLLMWrapper` automatically intercepts rate limit errors (e.g., Groq 429s) and re-routes exactly to Google Gemini `gemini-3.5-flash` without dropping the user's context.
 - **Automated Reflection Loop:** A dedicated `CriticAgent` evaluates generated itineraries on four dimensions (Logical Flow, Budget, Weather, Preferences). Scores below 7.0/10 trigger an automatic rework.
 - **Long-Term Memory:** Integrates **ChromaDB** for personalized trip context, remembering user preferences (e.g., "I prefer luxury travel") across different sessions.
 - **Real-Time Streaming UI:** A custom React + Vite frontend that consumes Server-Sent Events (SSE) from the FastAPI backend, beautifully streaming the execution state node-by-node.
@@ -94,8 +94,8 @@ Create a `.env` file in the root directory:
 
 | Variable | Description |
 |---|---|
-| `GROQ_API_KEY` | Primary LLM provider (Llama 3.3). |
-| `GOOGLE_API_KEY` | Fallback LLM provider (Gemini 2.0 Flash). |
+| `GROQ_API_KEY` | Primary LLM provider (Groq `openai/gpt-oss-120b`). |
+| `GOOGLE_API_KEY` | Fallback LLM provider (Gemini `gemini-3.5-flash`). |
 | `TAVILY_API_KEY` | For web and place research. |
 | `OPENWEATHERMAP_API_KEY` | For real-time weather data. |
 | `EXCHANGE_RATE_API_KEY` | API Ninjas key for currency conversion. |
@@ -123,7 +123,7 @@ Create a `.env` file in the root directory:
 ## 10. Challenges & Solutions
 
 - **Challenge:** Groq's strict API rate limits frequently interrupted multi-agent flows (429 errors).
-  - **Solution:** Engineered a robust `FallbackLLMWrapper` in `utils/llm_loader.py` that catches rate limits and seamlessly transfers the prompt state to Gemini 2.0 Flash, automatically sanitizing empty `HumanMessage` structures that Gemini rejects.
+  - **Solution:** Engineered a robust `FallbackLLMWrapper` in `utils/llm_loader.py` that catches rate limits and seamlessly transfers the prompt state to Gemini `gemini-3.5-flash`, automatically sanitizing empty `HumanMessage` structures that Gemini rejects.
 - **Challenge:** Infinite loops and massive token bloat during dynamic routing.
   - **Solution:** Transitioned the LangGraph architecture from a dynamic state-based router to a deterministic, single-pass linear pipeline. This drastically reduced token consumption and improved system reliability.
 - **Challenge:** UI connection timeouts during long agentic generations.
