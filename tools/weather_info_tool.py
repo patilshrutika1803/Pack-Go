@@ -34,7 +34,7 @@ class WeatherInfoTool:
                     date = item['dt_txt'].split(' ')[0]
                     temp = item['main']['temp']
                     desc = item['weather'][0]['description']
-                    forecast_summary.append(f"{date}: {temp} degree celcius , {desc}")
+                    forecast_summary.append(f"{date}: {temp}°C, {desc}")
                 return f"Weather forecast for {city}:\n" + "\n".join(forecast_summary)
             return f"Could not fetch forecast for {city}"
     

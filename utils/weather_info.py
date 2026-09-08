@@ -12,6 +12,7 @@ class WeatherForecastTool:
             params = {
                 "q": place,
                 "appid": self.api_key,
+                "units": "metric",
             }
             response = requests.get(url, params=params)
             return response.json() if response.status_code == 200 else {}

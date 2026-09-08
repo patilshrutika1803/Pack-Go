@@ -73,7 +73,7 @@ class Hotel(BaseModel):
 class WeatherInfo(BaseModel):
     """Structured weather information for the destination."""
     summary: str = Field(description="General summary of the weather.")
-    temperature_range: str = Field(description="Expected temperature range, e.g., '15°C - 25°C'.")
+    temperature_range: str = Field(description="Expected temperature range in Celsius, e.g., '15°C - 25°C'.")
     conditions: str = Field(description="Specific conditions, e.g., 'Sunny', 'Rainy'.")
     packing_suggestions: List[str] = Field(description="List of suggested items to pack based on weather.", default_factory=list)
     travel_warnings: List[str] = Field(description="Any weather-related warnings.", default_factory=list)
