@@ -1,0 +1,119 @@
+.place-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(8, 11, 24, 0.72);
+  backdrop-filter: blur(5px);
+}
+
+.place-modal {
+  width: min(100%, 520px);
+  max-height: min(640px, 90vh);
+  overflow-y: auto;
+  padding: 26px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-glow), 0 24px 70px rgba(0, 0, 0, 0.4);
+  animation: place-modal-enter 0.2s ease-out;
+}
+
+.place-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.place-modal-eyebrow {
+  margin-bottom: 6px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.place-modal h2 {
+  color: var(--text);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.place-modal-close {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  place-items: center;
+  border: 1px solid var(--border-light);
+  border-radius: 50%;
+  background: var(--surface2);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.place-modal-close:hover,
+.place-modal-close:focus-visible {
+  border-color: var(--primary);
+  color: var(--text);
+  outline: none;
+}
+
+.place-modal-description {
+  margin-top: 22px;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.place-modal-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.place-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+}
+
+.place-detail-label {
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.place-detail-value {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+@keyframes place-modal-enter {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 520px) {
+  .place-modal-backdrop { align-items: flex-end; padding: 12px; }
+  .place-modal { padding: 22px; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+  .place-modal-details { grid-template-columns: 1fr; }
+}

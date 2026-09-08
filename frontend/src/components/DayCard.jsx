@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import PlaceDetailModal from './PlaceDetailModal'
 import './DayCard.css'
 
 const DAY_THEMES = [
@@ -10,6 +11,7 @@ const DAY_THEMES = [
 
 export default function DayCard({ day, index }) {
   const [open, setOpen] = useState(true)
+  const [selectedPlace, setSelectedPlace] = useState(null)
 
   const {
     day_number, theme, hotel, meals = [],
@@ -49,6 +51,17 @@ export default function DayCard({ day, index }) {
     attractions.reduce((sum, attr) => sum + extractNumber(attr.place?.entry_fee), 0) +
     meals.reduce((sum, m) => sum + extractNumber(m.estimated_cost), 0) +
     extractNumber(transport?.estimated_cost);
+
+  useEffect(() => {
+    if (!selectedPlace) return undefined
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setSelectedPlace(null)
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [selectedPlace])
 
   return (
     <div
@@ -96,14 +109,20 @@ export default function DayCard({ day, index }) {
               <p className="section-title">Attractions</p>
               <div className="attractions-list">
                 {attractions.map((attr, i) => (
-                  <div key={i} className="attraction-item">
+                  <button
+                    key={i}
+                    type="button"
+                    className="attraction-item"
+                    onClick={() => attr.place?.name && setSelectedPlace({ place: attr.place, timing: attr.timing })}
+                    disabled={!attr.place?.name}
+                  >
                     <span className="attr-icon">{categoryIcon(attr.place?.category)}</span>
                     <div className="attr-info">
                       <p className="attr-name">{attr.place?.name}</p>
                       <p className="attr-meta">{attr.timing} · {attr.place?.entry_fee}</p>
                     </div>
                     <span className="attr-dur">{attr.place?.recommended_duration_hours}h</span>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -139,6 +158,14 @@ export default function DayCard({ day, index }) {
             </div>
           </div>
         </div>
+      )}
+
+      {selectedPlace && (
+        <PlaceDetailModal
+          place={selectedPlace.place}
+          timing={selectedPlace.timing}
+          onClose={() => setSelectedPlace(null)}
+        />
       )}
     </div>
   )
