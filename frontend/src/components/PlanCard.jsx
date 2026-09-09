@@ -5,77 +5,13 @@ import './PlanCard.css'
 
 export default function PlanCard({ plan }) {
   const { itinerary = [], budget, critic_review, weather, preferences } = plan
-  const budgetCurrency = resolveCurrency(plan)
+  const currency = resolveCurrency(plan)
+  return <div className="plan-card"><div className="plan-header"><div className="plan-header-left"><p className="eyebrow">Your trip is ready</p><h2 className="plan-title">{preferences?.destination ?? 'Your Trip'}</h2><p className="plan-subtitle">{preferences?.duration || itinerary.length} days · {preferences?.travelers || preferences?.number_of_travelers || 2} travelers · {preferences?.travel_style || 'curated for you'}</p><div className="plan-meta-chips"><span className="meta-chip"><span className="meta-chip-mark">☼</span> {weather?.conditions || 'Good conditions'}</span>{weather?.temperature_range && <span className="meta-chip"><span className="meta-chip-mark">°</span> {weather.temperature_range}</span>}</div></div>{budget && <div className="plan-budget-pill"><span className="budget-pill-label">Estimated total</span><span className="budget-pill-value">{formatCurrency(budget.total_estimated, currency)}</span><span className={`budget-status ${budget.is_within_budget ? 'within' : 'over'}`}>{budget.is_within_budget ? 'Within your budget' : 'Over your budget'}</span></div>}</div>{budget && <BudgetSummary budget={budget} preferences={preferences} currency={currency} />}<div className="plan-workspace"><div className="plan-days"><div className="section-heading-inline"><div><p className="eyebrow">The rhythm of your trip</p><h3>Itinerary</h3></div><button className="outline-button" type="button">Edit trip</button></div>{itinerary.length === 0 ? <div className="empty-itinerary"><span className="empty-icon">Map</span><p className="empty-title">Itinerary generation failed</p><p className="empty-sub">{critic_review?.warnings?.[0] ?? 'The AI could not build an itinerary for this query. Try rephrasing or reducing the number of days.'}</p></div> : itinerary.map((day, index) => <DayCard key={day.day_number} day={day} index={index} currency={currency} />)}</div><div className="map-panel"><div className="map-panel-top"><div><p className="eyebrow">Route at a glance</p><h3>Your trip, mapped</h3></div><span className="map-note">Map connection ready</span></div><div className="map-placeholder"><span className="map-route" /><span className="map-marker marker-one">1</span><span className="map-marker marker-two">2</span><span className="map-marker marker-three">3</span><span className="map-coast">NORTH</span></div></div></div><details className="ai-transparency"><summary>How PACK &amp; GO built this <span>+</span></summary><div className="ai-steps">{['Supervisor', 'Preference analysis', 'Research', 'Weather', 'Budget', 'Itinerary', 'Review'].map((step, index) => <div key={step}><span>{String(index + 1).padStart(2, '0')}</span>{step}</div>)}</div></details>{critic_review && <CriticScore review={critic_review} />}</div>
+}
 
-  const conditionEmoji = (c = '') => {
-    const l = c.toLowerCase()
-    if (l.includes('rain')) return '🌧️'
-    if (l.includes('cloud')) return '⛅'
-    if (l.includes('sun') || l.includes('clear')) return '☀️'
-    if (l.includes('storm')) return '⛈️'
-    return '🌤️'
-  }
-
-  return (
-    <div className="plan-card">
-      {/* Header */}
-      <div className="plan-header">
-        <div className="plan-header-left">
-          <h2 className="plan-title gradient-text">
-            {preferences?.destination ?? 'Your Trip'} Itinerary
-          </h2>
-          <div className="plan-meta-chips">
-            {preferences?.duration && (
-              <span className="meta-chip">📅 {preferences.duration} days</span>
-            )}
-            {weather?.conditions && (
-              <span className="meta-chip">
-                {conditionEmoji(weather.conditions)} {weather.conditions}
-              </span>
-            )}
-            {weather?.temperature_range && (
-              <span className="meta-chip">🌡️ {weather.temperature_range}</span>
-            )}
-            {preferences?.travel_style && (
-              <span className="meta-chip capitalize">🎒 {preferences.travel_style}</span>
-            )}
-          </div>
-        </div>
-
-        {budget && (
-          <div className="plan-budget-pill">
-            <span className="budget-pill-label">Total Cost</span>
-            <span className="budget-pill-value">
-              {formatCurrency(budget.total_estimated, budgetCurrency)}
-            </span>
-            <span className={`budget-status ${budget.is_within_budget ? 'within' : 'over'}`}>
-              {budget.is_within_budget ? '✓ Within budget' : '⚠ Over budget'}
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Day cards */}
-      <div className="plan-days">
-        {itinerary.length === 0 ? (
-          <div className="empty-itinerary">
-            <span className="empty-icon">🗺️</span>
-            <p className="empty-title">Itinerary generation failed</p>
-            <p className="empty-sub">
-              {critic_review?.warnings?.[0] ?? 'The AI could not build an itinerary for this query. Try rephrasing or reducing the number of days.'}
-            </p>
-          </div>
-        ) : (
-          itinerary.map((day, i) => (
-            <DayCard key={day.day_number} day={day} index={i} currency={budgetCurrency} />
-          ))
-        )}
-      </div>
-
-      {/* Critic Review */}
-      {critic_review && (
-        <CriticScore review={critic_review} />
-      )}
-    </div>
-  )
+function BudgetSummary({ budget, preferences, currency }) {
+  const total = Number(budget.total_estimated) || 0
+  const limit = Number(preferences?.total_budget) || total
+  const categories = [{ label: 'Accommodation', value: budget.accommodation_cost }, { label: 'Food', value: budget.food_cost }, { label: 'Activities', value: budget.activities_cost }, { label: 'Transport', value: budget.transport_cost }].filter(item => item.value != null)
+  return <section className="budget-summary"><div><p className="eyebrow">Your trip budget</p><h3>{formatCurrency(total, currency)} <span>of {formatCurrency(limit, currency)}</span></h3><div className="budget-progress"><span style={{ width: `${Math.min(100, (total / limit) * 100)}%` }} /></div><p className="budget-remaining">{budget.is_within_budget ? `✓ ${formatCurrency(Math.max(0, limit - total), currency)} remaining` : 'Review the plan to bring it within budget'}</p></div><div className="budget-breakdown">{categories.map(item => <div key={item.label}><span>{item.label}</span><strong>{formatCurrency(item.value, currency)}</strong></div>)}</div></section>
 }

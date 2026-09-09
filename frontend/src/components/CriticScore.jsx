@@ -59,14 +59,15 @@ export default function CriticScore({ review }) {
         </div>
 
         <div className="critic-right">
-          <p className="critic-title">📊 Critic Review</p>
+          <p className="critic-title">Trip check</p>
+          <p className="critic-summary">Your itinerary is being checked for balance, fit, and flow.</p>
 
           {/* Sub-scores */}
           {subScores.length > 0 && (
             <div className="sub-scores">
               {subScores.map(s => (
                 <div key={s.label} className="sub-score-row">
-                  <span className="sub-label">{s.label}</span>
+                  <span className="sub-label">{s.label.replace('Logical Flow', 'Logical route').replace('Budget Match', 'Budget fit').replace('Weather Fit', 'Weather fit').replace('Pref. Match', 'Preference match')}</span>
                   <div className="sub-bar-track">
                     <div
                       className="sub-bar-fill"
@@ -84,7 +85,7 @@ export default function CriticScore({ review }) {
       {/* Highlights */}
       {highlights.length > 0 && (
         <div className="critic-section">
-          <p className="critic-section-title">✅ Highlights</p>
+          <p className="critic-section-title">What is working</p>
           <ul className="critic-list">
             {highlights.map((h, i) => (
               <li key={i} className="highlight-item">{h}</li>
@@ -96,7 +97,7 @@ export default function CriticScore({ review }) {
       {/* Warnings */}
       {warnings.length > 0 && (
         <div className="critic-section">
-          <p className="critic-section-title">⚠️ Warnings</p>
+          <p className="critic-section-title">Things to know</p>
           <ul className="critic-list">
             {warnings.map((w, i) => (
               <li key={i} className="warning-item">{w}</li>

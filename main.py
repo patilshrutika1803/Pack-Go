@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from agent.agentic_workflow import GraphBuilder, build_final_plan, validate_final_state
 from api.v1.trips import router as api_v1_router
+from api.v1.auth import router as auth_router
 from services.trip_service import TripService
 from utils.streaming import format_sse_event
 from memory.long_term import LongTermMemory
@@ -33,6 +34,7 @@ def _get_allowed_origins() -> list[str]:
 app = FastAPI(title="PACK & GO API")
 
 app.include_router(api_v1_router)
+app.include_router(auth_router)
 
 app.add_middleware(
     CORSMiddleware,

@@ -6,7 +6,7 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 
 from database import Base
-from database.models import Trip  # noqa: F401  # ensures Trip is imported and registered
+from database.models import Trip, User  # noqa: F401  # ensures models are registered
 
 load_dotenv()
 
