@@ -1,0 +1,74 @@
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from database.connection import get_db
+from database.models import Trip
+from models.api_schemas import DeleteTripResponse, TripCreateRequest, TripResponse, TripUpdateRequest
+from services.trip_service import TripService
+
+router = APIRouter(prefix="/api/v1", tags=["Trips"])
+
+
+def _raise_trip_not_found() -> None:
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found.")
+
+
+@router.post("/trips", response_model=TripResponse, status_code=status.HTTP_201_CREATED)
+def create_trip(payload: TripCreateRequest, db: Session = Depends(get_db)) -> TripResponse:
+    _ = db
+    trip_service = TripService()
+
+    trip = Trip(**payload.model_dump(exclude_none=True))
+    created_trip = trip_service.create_trip(trip)
+    return TripResponse.model_validate(created_trip)
+
+
+@router.get("/trips", response_model=list[TripResponse])
+def list_trips(db: Session = Depends(get_db)) -> list[TripResponse]:
+    _ = db
+    trip_service = TripService()
+    trips = trip_service.list_trips()
+    return [TripResponse.model_validate(trip) for trip in trips]
+
+
+@router.get("/trips/{trip_id}", response_model=TripResponse)
+def get_trip(trip_id: str, db: Session = Depends(get_db)) -> TripResponse:
+    _ = db
+    trip_service = TripService()
+    trip = trip_service.get_trip(trip_id)
+    if trip is None:
+        _raise_trip_not_found()
+    return TripResponse.model_validate(trip)
+
+
+@router.patch("/trips/{trip_id}", response_model=TripResponse)
+def update_trip(trip_id: str, payload: TripUpdateRequest, db: Session = Depends(get_db)) -> TripResponse:
+    _ = db
+    trip_service = TripService()
+    updates = payload.model_dump(exclude_unset=True, exclude_none=True)
+
+    if not updates:
+        trip = trip_service.get_trip(trip_id)
+        if trip is None:
+            _raise_trip_not_found()
+        return TripResponse.model_validate(trip)
+
+    updated_trip = trip_service.update_trip(trip_id, updates)
+    if updated_trip is None:
+        _raise_trip_not_found()
+
+    return TripResponse.model_validate(updated_trip)
+
+
+@router.delete("/trips/{trip_id}", response_model=DeleteTripResponse)
+def delete_trip(trip_id: str, db: Session = Depends(get_db)) -> DeleteTripResponse:
+    _ = db
+    trip_service = TripService()
+    deleted = trip_service.delete_trip(trip_id)
+    if not deleted:
+        _raise_trip_not_found()
+    return DeleteTripResponse(message="Trip deleted successfully.")

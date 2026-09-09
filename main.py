@@ -4,12 +4,13 @@ FastAPI backend entry point with SSE streaming support.
 import os
 import uuid
 from typing import Optional
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from agent.agentic_workflow import GraphBuilder, build_final_plan, validate_final_state
+from api.v1.trips import router as api_v1_router
 from utils.streaming import format_sse_event
 from memory.long_term import LongTermMemory
 from logger.logging import get_logger
@@ -30,6 +31,8 @@ def _get_allowed_origins() -> list[str]:
 
 app = FastAPI(title="PACK & GO API")
 
+app.include_router(api_v1_router)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_get_allowed_origins(),
@@ -37,6 +40,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": exc.detail},
+    )
 
 
 @app.exception_handler(Exception)

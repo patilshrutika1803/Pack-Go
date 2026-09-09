@@ -7,7 +7,7 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
-from database import SessionLocal, Trip
+from database import Trip
 from models.schemas import (
     BudgetBreakdown,
     CriticReview,
@@ -32,6 +32,8 @@ class TripService:
     ) -> Trip:
         """Create a trip from a TravelPlan or an existing Trip instance."""
         trip = self._normalize_trip_input(travel_plan, trip_id)
+        from database.connection import SessionLocal
+
         session = SessionLocal()
 
         try:
@@ -46,6 +48,8 @@ class TripService:
             session.close()
 
     def get_trip(self, trip_id: str) -> Trip | None:
+        from database.connection import SessionLocal
+
         session = SessionLocal()
 
         try:
@@ -56,6 +60,8 @@ class TripService:
             session.close()
 
     def list_trips(self) -> list[Trip]:
+        from database.connection import SessionLocal
+
         session = SessionLocal()
 
         try:
@@ -69,6 +75,8 @@ class TripService:
     def update_trip(self, trip_id: str, updates: dict[str, Any] | None) -> Trip | None:
         if not updates:
             return self.get_trip(trip_id)
+
+        from database.connection import SessionLocal
 
         session = SessionLocal()
 
@@ -94,6 +102,8 @@ class TripService:
             session.close()
 
     def delete_trip(self, trip_id: str) -> bool:
+        from database.connection import SessionLocal
+
         session = SessionLocal()
 
         try:
