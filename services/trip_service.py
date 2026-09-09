@@ -19,6 +19,18 @@ from models.schemas import (
 )
 
 
+class TripNotFoundError(Exception):
+    """Raised when a trip cannot be found."""
+
+
+class DayNotFoundError(Exception):
+    """Raised when a day number is not present in an itinerary."""
+
+
+class DayRegenerationError(Exception):
+    """Raised when the single-day regeneration process fails."""
+
+
 class TripService:
     """CRUD service for persisting and retrieving PACK & GO trip plans."""
 
@@ -120,6 +132,59 @@ class TripService:
         finally:
             session.close()
 
+    def regenerate_day(self, trip_id: str, day_number: int) -> dict[str, Any]:
+        from database.connection import SessionLocal
+
+        session = SessionLocal()
+
+        try:
+            trip = session.get(Trip, trip_id)
+            if trip is None:
+                raise TripNotFoundError(f"Trip {trip_id} was not found.")
+
+            itinerary = list(trip.itinerary or [])
+            if day_number < 1 or day_number > len(itinerary):
+                raise DayNotFoundError(f"Day {day_number} not found for trip {trip_id}.")
+
+            replacement_day = self._generate_single_day(trip, day_number)
+            replacement_day = DayPlan.model_validate(replacement_day)
+            replacement_day.day_number = day_number
+
+            itinerary[day_number - 1] = self._normalize_json_value(replacement_day.model_dump(mode="json"))
+            trip.itinerary = itinerary
+
+            revision_history = list(trip.revision_history or [])
+            revision_history.append(
+                {
+                    "iteration": len(revision_history) + 1,
+                    "score": 0,
+                    "changes_made": f"Regenerated day {day_number}.",
+                }
+            )
+            trip.revision_history = revision_history
+            trip.updated_at = self._next_timestamp()
+
+            session.commit()
+            session.refresh(trip)
+
+            return {
+                "trip_id": trip.id,
+                "day_number": day_number,
+                "regenerated_day": self._normalize_json_value(trip.itinerary[day_number - 1]),
+                "updated_at": trip.updated_at,
+            }
+        except (TripNotFoundError, DayNotFoundError):
+            session.rollback()
+            raise
+        except SQLAlchemyError as exc:
+            session.rollback()
+            raise RuntimeError("Failed to regenerate trip day.") from exc
+        except Exception as exc:
+            session.rollback()
+            raise RuntimeError("Failed to regenerate trip day.") from exc
+        finally:
+            session.close()
+
     def travelplan_to_trip(
         self,
         travel_plan: TravelPlan | dict[str, Any],
@@ -157,6 +222,68 @@ class TripService:
             created_at=created_at,
             updated_at=created_at,
         )
+
+    def _generate_single_day(self, trip: Trip, day_number: int) -> dict[str, Any]:
+        """
+        Generate exactly one replacement day using the existing LLM configuration,
+        while leaving the rest of the trip untouched.
+
+        The existing LangGraph workflow is intentionally left unchanged. This service-level
+        implementation reuses the established structured-output LLM utilities and the same
+        itinerary schema, but targets only a single day instead of regenerating the full
+        itinerary.
+        """
+        preferences = UserPreferences(
+            destination=trip.destination,
+            duration=trip.duration,
+            total_budget=trip.total_budget,
+            budget_currency=trip.budget_currency,
+            travel_style=trip.travel_style,
+            interests=list(trip.interests or []),
+            things_to_avoid=list(trip.things_to_avoid or []),
+            group_size=trip.group_size,
+            travel_dates=trip.travel_dates,
+        )
+
+        day_context = self._normalize_json_value(trip.itinerary[day_number - 1] if trip.itinerary else {})
+
+        content = (
+            f"Destination: {preferences.destination}\n"
+            f"Trip duration: {preferences.duration} days\n"
+            f"Travel style: {preferences.travel_style}\n"
+            f"Group size: {preferences.group_size}\n"
+            f"Interests: {', '.join(preferences.interests) if preferences.interests else 'General'}\n"
+            f"Things to avoid: {', '.join(preferences.things_to_avoid) if preferences.things_to_avoid else 'None'}\n"
+            f"Current weather: {trip.weather}\n"
+            f"Current budget: {trip.budget_breakdown}\n"
+            f"Existing day {day_number} context:\n{day_context}\n"
+            f"Regenerate only day {day_number}. Preserve every other itinerary day exactly as-is."
+        )
+
+        system_prompt = (
+            f"{ITINERARY_SYSTEM_PROMPT}\n\n"
+            "You are regenerating exactly one itinerary day for an existing trip. "
+            "Return a one-item itinerary list containing only the replacement for day_number "
+            f"{day_number}. Do not regenerate or modify any other days."
+        )
+
+        def build_chain(llm):
+            return build_structured_output(llm, ItineraryOutput)
+
+        response = invoke_with_fallback(
+            build_chain,
+            [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=content),
+            ],
+        )
+
+        if not getattr(response, "itinerary", None):
+            raise DayRegenerationError("No itinerary day was generated.")
+
+        generated_day = response.itinerary[0]
+        generated_day.day_number = day_number
+        return self._normalize_json_value(generated_day.model_dump(mode="json"))
 
     def trip_to_travelplan(self, trip: Trip) -> TravelPlan:
         preferences = UserPreferences(

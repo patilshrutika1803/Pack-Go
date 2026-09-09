@@ -7,8 +7,14 @@ from sqlalchemy.orm import Session
 
 from database.connection import get_db
 from database.models import Trip
-from models.api_schemas import DeleteTripResponse, TripCreateRequest, TripResponse, TripUpdateRequest
-from services.trip_service import TripService
+from models.api_schemas import (
+    DeleteTripResponse,
+    TripCreateRequest,
+    TripDayRegenerationResponse,
+    TripResponse,
+    TripUpdateRequest,
+)
+from services.trip_service import DayNotFoundError, TripNotFoundError, TripService
 
 router = APIRouter(prefix="/api/v1", tags=["Trips"])
 
@@ -62,6 +68,36 @@ def update_trip(trip_id: str, payload: TripUpdateRequest, db: Session = Depends(
         _raise_trip_not_found()
 
     return TripResponse.model_validate(updated_trip)
+
+
+@router.patch(
+    "/trips/{trip_id}/days/{day_number}/regenerate",
+    response_model=TripDayRegenerationResponse,
+)
+def regenerate_trip_day(
+    trip_id: str,
+    day_number: int,
+    db: Session = Depends(get_db),
+) -> TripDayRegenerationResponse:
+    _ = db
+    trip_service = TripService()
+
+    try:
+        result = trip_service.regenerate_day(trip_id, day_number)
+    except TripNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found.") from exc
+    except DayNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Day {day_number} not found for trip {trip_id}.",
+        ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to generate the travel plan at this time. Please try again.",
+        ) from exc
+
+    return TripDayRegenerationResponse.model_validate(result)
 
 
 @router.delete("/trips/{trip_id}", response_model=DeleteTripResponse)

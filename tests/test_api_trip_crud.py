@@ -120,6 +120,152 @@ def test_delete_api_v1_trips_removes_trip(api_client):
     assert missing_delete.json()["error"] == "Trip not found."
 
 
+def test_patch_api_v1_trips_regenerate_day_updates_requested_day(api_client, monkeypatch):
+    created = api_client.post(
+        "/api/v1/trips",
+        json=build_trip_payload(
+            itinerary=[
+                {
+                    "day_number": 1,
+                    "theme": "Arrival",
+                    "hotel": {"name": "Hotel A", "stars": 3, "price_per_night": 100, "amenities": ["Wi-Fi"], "description": "Hotel A description."},
+                    "meals": [],
+                    "attractions": [],
+                    "activities": ["Check-in"],
+                    "transport": {"mode": "Taxi", "estimated_cost": 200},
+                    "estimated_day_cost": 1000,
+                },
+                {
+                    "day_number": 2,
+                    "theme": "Culture",
+                    "hotel": {"name": "Hotel B", "stars": 4, "price_per_night": 150, "amenities": ["Wi-Fi"], "description": "Hotel B description."},
+                    "meals": [],
+                    "attractions": [],
+                    "activities": ["Museum"],
+                    "transport": {"mode": "Taxi", "estimated_cost": 200},
+                    "estimated_day_cost": 1500,
+                },
+                {
+                    "day_number": 3,
+                    "theme": "Departure",
+                    "hotel": {"name": "Hotel C", "stars": 3, "price_per_night": 120, "amenities": ["Wi-Fi"], "description": "Hotel C description."},
+                    "meals": [],
+                    "attractions": [],
+                    "activities": ["Checkout"],
+                    "transport": {"mode": "Taxi", "estimated_cost": 200},
+                    "estimated_day_cost": 1200,
+                },
+            ]
+        ),
+    )
+    trip_id = created.json()["id"]
+
+    def fake_generate(self, trip, day_number):
+        return {
+            "day_number": day_number,
+            "theme": "Updated day two",
+            "hotel": {
+                "name": "Hotel B Updated",
+                "stars": 4,
+                "price_per_night": 180,
+                "amenities": ["Wi-Fi", "Breakfast"],
+                "description": "Updated hotel near the river.",
+            },
+            "meals": [],
+            "attractions": [],
+            "activities": ["Museum visit"],
+            "transport": {"mode": "Taxi", "estimated_cost": 300},
+            "estimated_day_cost": 2200,
+        }
+
+    monkeypatch.setattr("services.trip_service.TripService._generate_single_day", fake_generate)
+
+    response = api_client.patch(f"/api/v1/trips/{trip_id}/days/2/regenerate")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["trip_id"] == trip_id
+    assert payload["day_number"] == 2
+    assert payload["regenerated_day"]["theme"] == "Updated day two"
+
+    persisted = api_client.get(f"/api/v1/trips/{trip_id}")
+    assert persisted.json()["itinerary"][1]["theme"] == "Updated day two"
+    assert persisted.json()["itinerary"][0]["theme"] == "Arrival"
+    assert persisted.json()["itinerary"][2]["theme"] == "Departure"
+
+
+def test_patch_api_v1_trips_regenerate_day_returns_404_for_missing_trip(api_client):
+    response = api_client.patch("/api/v1/trips/not-found/days/1/regenerate")
+
+    assert response.status_code == 404
+    assert response.json()["error"] == "Trip not found."
+
+
+def test_patch_api_v1_trips_regenerate_day_returns_404_for_missing_day(api_client):
+    created = api_client.post("/api/v1/trips", json=build_trip_payload())
+    trip_id = created.json()["id"]
+
+    response = api_client.patch(f"/api/v1/trips/{trip_id}/days/99/regenerate")
+
+    assert response.status_code == 404
+    assert response.json()["error"] == f"Day 99 not found for trip {trip_id}."
+
+
+def test_patch_api_v1_trips_regenerate_day_returns_generic_error_on_ai_failure(api_client, monkeypatch):
+    created = api_client.post(
+        "/api/v1/trips",
+        json=build_trip_payload(
+            itinerary=[
+                {
+                    "day_number": 1,
+                    "theme": "Arrival",
+                    "hotel": {"name": "Hotel A", "stars": 3, "price_per_night": 100, "amenities": ["Wi-Fi"], "description": "Hotel A description."},
+                    "meals": [],
+                    "attractions": [],
+                    "activities": ["Check-in"],
+                    "transport": {"mode": "Taxi", "estimated_cost": 200},
+                    "estimated_day_cost": 1000,
+                },
+                {
+                    "day_number": 2,
+                    "theme": "Culture",
+                    "hotel": {"name": "Hotel B", "stars": 4, "price_per_night": 150, "amenities": ["Wi-Fi"], "description": "Hotel B description."},
+                    "meals": [],
+                    "attractions": [],
+                    "activities": ["Museum"],
+                    "transport": {"mode": "Taxi", "estimated_cost": 200},
+                    "estimated_day_cost": 1500,
+                },
+                {
+                    "day_number": 3,
+                    "theme": "Departure",
+                    "hotel": {"name": "Hotel C", "stars": 3, "price_per_night": 120, "amenities": ["Wi-Fi"], "description": "Hotel C description."},
+                    "meals": [],
+                    "attractions": [],
+                    "activities": ["Checkout"],
+                    "transport": {"mode": "Taxi", "estimated_cost": 200},
+                    "estimated_day_cost": 1200,
+                },
+            ]
+        ),
+    )
+    trip_id = created.json()["id"]
+
+    def fake_generate(self, trip, day_number):
+        raise RuntimeError("provider unavailable")
+
+    monkeypatch.setattr("services.trip_service.TripService._generate_single_day", fake_generate)
+
+    response = api_client.patch(f"/api/v1/trips/{trip_id}/days/2/regenerate")
+
+    assert response.status_code == 500
+    assert response.json()["error"] == "Unable to generate the travel plan at this time. Please try again."
+
+    persisted = api_client.get(f"/api/v1/trips/{trip_id}")
+    assert persisted.status_code == 200
+    assert persisted.json()["itinerary"][1]["theme"] == "Culture"
+
+
 def test_post_api_v1_trips_rejects_missing_required_fields(api_client):
     response = api_client.post("/api/v1/trips", json={"destination": "Kyoto, Japan"})
 

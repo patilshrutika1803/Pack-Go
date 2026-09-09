@@ -74,5 +74,14 @@ class TripResponse(BaseModel):
     updated_at: datetime
 
 
+class TripDayRegenerationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    trip_id: str
+    day_number: int
+    regenerated_day: dict[str, Any]
+    updated_at: datetime
+
+
 class DeleteTripResponse(BaseModel):
     message: str

@@ -178,6 +178,252 @@ def test_delete_trip_removes_trip(isolated_trip_service, representative_travel_p
     assert isolated_trip_service.get_trip(created_trip.id) is None
 
 
+def test_regenerate_day_updates_only_requested_day(isolated_trip_service, representative_travel_plan, monkeypatch):
+    representative_travel_plan.itinerary = [
+        DayPlan(
+            day_number=1,
+            theme="Arrival and temples",
+            hotel=Hotel(
+                name="Kiyomizu Inn",
+                stars=3,
+                price_per_night=120,
+                amenities=["Wi-Fi", "Breakfast"],
+                description="Simple hotel near the city center.",
+            ),
+            meals=[
+                MealInfo(
+                    meal_type="Breakfast",
+                    restaurant_name="Cafe Matsu",
+                    estimated_cost=250,
+                )
+            ],
+            attractions=[],
+            activities=["Check-in", "Temple walk"],
+            transport=Transport(mode="Taxi", estimated_cost=250),
+            estimated_day_cost=2800,
+        ),
+        DayPlan(
+            day_number=2,
+            theme="Cultural day",
+            hotel=Hotel(
+                name="Kyoto Guesthouse",
+                stars=3,
+                price_per_night=140,
+                amenities=["Wi-Fi"],
+                description="Guesthouse in the heart of downtown.",
+            ),
+            meals=[
+                MealInfo(
+                    meal_type="Lunch",
+                    restaurant_name="Sakura Kitchen",
+                    estimated_cost=350,
+                )
+            ],
+            attractions=[],
+            activities=["Museum", "Lantern district"],
+            transport=Transport(mode="Metro", estimated_cost=180),
+            estimated_day_cost=3000,
+        ),
+        DayPlan(
+            day_number=3,
+            theme="Departure day",
+            hotel=Hotel(
+                name="Kyoto Station Inn",
+                stars=3,
+                price_per_night=130,
+                amenities=["Wi-Fi"],
+                description="Convenient station hotel.",
+            ),
+            meals=[
+                MealInfo(
+                    meal_type="Dinner",
+                    restaurant_name="Station Noodle Bar",
+                    estimated_cost=320,
+                )
+            ],
+            attractions=[],
+            activities=["Souvenir shopping"],
+            transport=Transport(mode="Taxi", estimated_cost=200),
+            estimated_day_cost=2600,
+        ),
+    ]
+
+    created_trip = isolated_trip_service.create_trip(representative_travel_plan)
+    original_trip = isolated_trip_service.get_trip(created_trip.id)
+
+    replacement_day = DayPlan(
+        day_number=2,
+        theme="Mountain day",
+        hotel=Hotel(
+            name="Higashiyama Lodge",
+            stars=4,
+            price_per_night=180,
+            amenities=["Wi-Fi", "Breakfast"],
+            description="Lodge near the river.",
+        ),
+        meals=[
+            MealInfo(
+                meal_type="Breakfast",
+                restaurant_name="River Cafe",
+                estimated_cost=250,
+            )
+        ],
+        attractions=[],
+        activities=["Hike", "Tea tasting"],
+        transport=Transport(mode="Train", estimated_cost=250),
+        estimated_day_cost=3200,
+    )
+
+    monkeypatch.setattr(
+        isolated_trip_service,
+        "_generate_single_day",
+        lambda trip, day_number: replacement_day.model_dump(mode="json"),
+    )
+
+    response = isolated_trip_service.regenerate_day(created_trip.id, 2)
+
+    assert response["trip_id"] == created_trip.id
+    assert response["day_number"] == 2
+    assert response["regenerated_day"]["theme"] == "Mountain day"
+
+    updated_trip = isolated_trip_service.get_trip(created_trip.id)
+    assert updated_trip is not None
+    assert updated_trip.destination == original_trip.destination
+    assert updated_trip.itinerary[0] == original_trip.itinerary[0]
+    assert updated_trip.itinerary[1]["theme"] == "Mountain day"
+    assert updated_trip.itinerary[2] == original_trip.itinerary[2]
+    assert updated_trip.updated_at >= original_trip.updated_at
+    assert updated_trip.revision_history[-1]["changes_made"] == "Regenerated day 2."
+
+
+def test_regenerate_day_rolls_back_on_db_failure(isolated_trip_service, representative_travel_plan, monkeypatch):
+    representative_travel_plan.itinerary = [
+        DayPlan(
+            day_number=1,
+            theme="Arrival and temples",
+            hotel=Hotel(
+                name="Kiyomizu Inn",
+                stars=3,
+                price_per_night=120,
+                amenities=["Wi-Fi", "Breakfast"],
+                description="Simple hotel near the city center.",
+            ),
+            meals=[
+                MealInfo(
+                    meal_type="Breakfast",
+                    restaurant_name="Cafe Matsu",
+                    estimated_cost=250,
+                )
+            ],
+            attractions=[],
+            activities=["Check-in", "Temple walk"],
+            transport=Transport(mode="Taxi", estimated_cost=250),
+            estimated_day_cost=2800,
+        ),
+        DayPlan(
+            day_number=2,
+            theme="Cultural day",
+            hotel=Hotel(
+                name="Kyoto Guesthouse",
+                stars=3,
+                price_per_night=140,
+                amenities=["Wi-Fi"],
+                description="Guesthouse in the heart of downtown.",
+            ),
+            meals=[
+                MealInfo(
+                    meal_type="Lunch",
+                    restaurant_name="Sakura Kitchen",
+                    estimated_cost=350,
+                )
+            ],
+            attractions=[],
+            activities=["Museum", "Lantern district"],
+            transport=Transport(mode="Metro", estimated_cost=180),
+            estimated_day_cost=3000,
+        ),
+        DayPlan(
+            day_number=3,
+            theme="Departure day",
+            hotel=Hotel(
+                name="Kyoto Station Inn",
+                stars=3,
+                price_per_night=130,
+                amenities=["Wi-Fi"],
+                description="Convenient station hotel.",
+            ),
+            meals=[
+                MealInfo(
+                    meal_type="Dinner",
+                    restaurant_name="Station Noodle Bar",
+                    estimated_cost=320,
+                )
+            ],
+            attractions=[],
+            activities=["Souvenir shopping"],
+            transport=Transport(mode="Taxi", estimated_cost=200),
+            estimated_day_cost=2600,
+        ),
+    ]
+
+    created_trip = isolated_trip_service.create_trip(representative_travel_plan)
+
+    replacement_day = DayPlan(
+        day_number=2,
+        theme="Mountain day",
+        hotel=Hotel(
+            name="Higashiyama Lodge",
+            stars=4,
+            price_per_night=180,
+            amenities=["Wi-Fi", "Breakfast"],
+            description="Lodge near the river.",
+        ),
+        meals=[
+            MealInfo(
+                meal_type="Breakfast",
+                restaurant_name="River Cafe",
+                estimated_cost=250,
+            )
+        ],
+        attractions=[],
+        activities=["Hike", "Tea tasting"],
+        transport=Transport(mode="Train", estimated_cost=250),
+        estimated_day_cost=3200,
+    )
+
+    monkeypatch.setattr(
+        isolated_trip_service,
+        "_generate_single_day",
+        lambda trip, day_number: replacement_day.model_dump(mode="json"),
+    )
+
+    import database.connection as connection_module
+
+    real_factory = connection_module.SessionLocal
+
+    class CommitFailSession:
+        def __init__(self):
+            self._inner = real_factory()
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+        def commit(self):
+            raise RuntimeError("database write failure")
+
+        def rollback(self):
+            return self._inner.rollback()
+
+    monkeypatch.setattr(connection_module, "SessionLocal", lambda: CommitFailSession())
+
+    with pytest.raises(RuntimeError, match="Failed to regenerate trip day."):
+        isolated_trip_service.regenerate_day(created_trip.id, 2)
+
+    persisted_trip = isolated_trip_service.get_trip(created_trip.id)
+    assert persisted_trip is not None
+    assert persisted_trip.itinerary[1]["theme"] == "Cultural day"
+
+
 def test_travelplan_conversion_round_trip(isolated_trip_service, representative_travel_plan):
     converted_trip = isolated_trip_service.travelplan_to_trip(representative_travel_plan, trip_id="fixture-trip-id")
 
