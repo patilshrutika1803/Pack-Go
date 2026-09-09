@@ -45,7 +45,7 @@ export default function HeroSection({ onSubmit, loading }) {
         </h1>
 
         <p className="hero-subtitle">
-          One Platform for Every Journey
+          {typed || 'One Platform for Every Journey'}
         </p>
 
         {/* Main input */}

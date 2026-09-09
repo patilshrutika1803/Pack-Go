@@ -17,7 +17,6 @@ export default function DayCard({ day, index, currency }) {
   const {
     day_number, theme, hotel, meals = [],
     attractions = [], transport, activities = [],
-    estimated_day_cost,
   } = day
 
   const categoryIcon = (cat = '') => {

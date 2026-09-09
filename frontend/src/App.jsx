@@ -92,7 +92,7 @@ export default function App() {
               setError(message)
               setLoading(false)
             }
-          } catch (_) { /* skip malformed event */ }
+          } catch { /* skip malformed event */ }
         }
       }
     } catch (err) {
