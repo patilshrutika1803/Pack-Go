@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from agent.agentic_workflow import GraphBuilder, build_final_plan, validate_final_state
 from api.v1.trips import router as api_v1_router
+from services.trip_service import TripService
 from utils.streaming import format_sse_event
 from memory.long_term import LongTermMemory
 from logger.logging import get_logger
@@ -111,8 +112,16 @@ async def plan_trip_sync(request: PlanRequest):
                 budget=pref.total_budget,
                 duration=pref.duration
             )
-            
-        return {"thread_id": thread_id, "state": "complete", "plan": build_final_plan(output)}
+
+        final_plan = build_final_plan(output)
+
+        try:
+            TripService().create_trip(final_plan)
+        except Exception:
+            logger.exception("Failed to persist generated TravelPlan for thread_id=%s", thread_id)
+            return JSONResponse(status_code=500, content={"error": GENERIC_ERROR_MESSAGE})
+
+        return {"thread_id": thread_id, "state": "complete", "plan": final_plan}
     except Exception as exc:
         logger.exception("Unexpected error in /plan request")
         return JSONResponse(status_code=500, content={"error": GENERIC_ERROR_MESSAGE})
