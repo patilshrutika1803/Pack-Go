@@ -17,6 +17,7 @@ class ResearchOutput(BaseModel):
     """Structured output containing lists of places and restaurants."""
     places: List[Place] = Field(description="List of top attractions and places to visit.")
     restaurants: List[Restaurant] = Field(description="List of highly rated restaurants.")
+    activities: List[str] = Field(description="List of activities to do in the destination.", default_factory=list)
 
 def research_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -55,7 +56,8 @@ def research_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "research_data": {
                 "places": [p.model_dump() for p in final_response.places],
-                "restaurants": [r.model_dump() for r in final_response.restaurants]
+                "restaurants": [r.model_dump() for r in final_response.restaurants],
+                "activities": list(final_response.activities),
             },
             "completed_agents": ["ResearchAgent"]
         }

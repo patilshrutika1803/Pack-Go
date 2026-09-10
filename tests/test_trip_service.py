@@ -437,3 +437,26 @@ def test_travelplan_conversion_round_trip(isolated_trip_service, representative_
     assert converted_plan.preferences is not None
     assert converted_plan.preferences.destination == "Kyoto, Japan"
     assert converted_plan.data_freshness == {"weather": "live", "budget": "live"}
+
+
+def test_persisted_trip_preserves_reconciled_plan_values(isolated_trip_service, representative_travel_plan):
+    representative_travel_plan.budget = BudgetBreakdown(
+        total_estimated=1900.0,
+        currency="INR",
+        categories=[
+            CategoryCost(name="Accommodation", amount=1200.0),
+            CategoryCost(name="Food", amount=350.0),
+            CategoryCost(name="Transport", amount=250.0),
+            CategoryCost(name="Activities", amount=100.0),
+        ],
+        is_within_budget=True,
+    )
+    representative_travel_plan.itinerary[0].hotel.price_per_night = "₹1,200"
+    representative_travel_plan.itinerary[0].meals[0].estimated_cost = "₹350"
+    representative_travel_plan.itinerary[0].transport.estimated_cost = "₹250"
+
+    trip = isolated_trip_service.create_trip(representative_travel_plan)
+    restored = isolated_trip_service.trip_to_travelplan(trip)
+
+    assert restored.budget == representative_travel_plan.budget
+    assert restored.itinerary == representative_travel_plan.itinerary

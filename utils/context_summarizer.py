@@ -42,6 +42,11 @@ def summarize_for_itinerary(
                 cost = r.get("average_cost", "")
                 lines.append(f"  - {name} ({cuisine}, avg: {cost})")
 
+        activities = research.get("activities", [])[:5]
+        if activities:
+            lines.append("SUGGESTED ACTIVITIES:")
+            lines.extend(f"  - {activity}" for activity in activities)
+
     # ── Weather (one line) ────────────────────────────────────────────────────
     if weather:
         summary = getattr(weather, "summary", "")

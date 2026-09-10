@@ -8,8 +8,9 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from pydantic import BaseModel, Field
 from utils.llm_loader import build_structured_output, invoke_with_fallback
 from utils.context_summarizer import summarize_for_itinerary
+from utils.plan_costs import reconcile_budget
 from prompt_library.itinerary_prompt import SYSTEM_PROMPT
-from models.schemas import DayPlan
+from models.schemas import BudgetBreakdown, DayPlan
 from logger.logging import get_logger
 
 logger = get_logger(__name__)
@@ -37,6 +38,8 @@ def itinerary_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     weather = state.get("weather_info")
     budget = state.get("budget_breakdown")
+    if budget and not hasattr(budget, "model_copy"):
+        budget = BudgetBreakdown.model_validate({"is_within_budget": True, **budget})
     research_data = state.get("research_data", {})
     critic_review = state.get("critic_review")
 
@@ -81,8 +84,20 @@ def itinerary_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         ]
         final_response = invoke_with_fallback(build_chain, messages)
         logger.info(f"Itinerary created with {len(final_response.itinerary)} days.")
+        researched_activities = research_data.get("activities", [])
+        for day in final_response.itinerary:
+            if not day.activities:
+                day.activities = list(researched_activities[:3]) or [
+                    attraction.place.name for attraction in day.attractions[:3]
+                ]
+        reconciled_budget = reconcile_budget(
+            budget,
+            final_response.itinerary,
+            preferences.total_budget,
+        )
         return {
             "itinerary": [day.model_dump() for day in final_response.itinerary],
+            "budget_breakdown": reconciled_budget,
             "completed_agents": ["ItineraryAgent"],
         }
 

@@ -13,6 +13,6 @@ export default function PlanCard({ plan, onRegenerate }) {
 function BudgetSummary({ budget, preferences, currency }) {
   const total = Number(budget.total_estimated) || 0
   const limit = Number(preferences?.total_budget) || total
-  const categories = [{ label: 'Accommodation', value: budget.accommodation_cost }, { label: 'Food', value: budget.food_cost }, { label: 'Activities', value: budget.activities_cost }, { label: 'Transport', value: budget.transport_cost }].filter(item => item.value != null)
+  const categories = (budget.categories || []).map(category => ({ label: category.name, value: category.amount }))
   return <section className="budget-summary"><div><p className="eyebrow">Your trip budget</p><h3>{formatCurrency(total, currency)} <span>of {formatCurrency(limit, currency)}</span></h3><div className="budget-progress"><span style={{ width: `${Math.min(100, (total / limit) * 100)}%` }} /></div><p className="budget-remaining">{budget.is_within_budget ? `✓ ${formatCurrency(Math.max(0, limit - total), currency)} remaining` : 'Review the plan to bring it within budget'}</p></div><div className="budget-breakdown">{categories.map(item => <div key={item.label}><span>{item.label}</span><strong>{formatCurrency(item.value, currency)}</strong></div>)}</div></section>
 }
