@@ -4,7 +4,7 @@ FastAPI backend entry point with SSE streaming support.
 import os
 import uuid
 from typing import Optional
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +14,8 @@ from agent.agentic_workflow import GraphBuilder, build_final_plan, validate_fina
 from api.v1.trips import router as api_v1_router
 from api.v1.auth import router as auth_router
 from api.v1.users import router as users_router
+from api.v1.dependencies import get_optional_current_user
+from database import User
 from services.trip_service import TripService
 from utils.streaming import format_sse_event
 from memory.long_term import LongTermMemory
@@ -87,7 +89,7 @@ class PlanRequest(BaseModel):
     remember_me: bool = True
 
 @app.post("/plan")
-async def plan_trip_sync(request: PlanRequest):
+async def plan_trip_sync(request: PlanRequest, user: User | None = Depends(get_optional_current_user)):
     """Backward compatible synchronous endpoint."""
     try:
         thread_id = request.thread_id or str(uuid.uuid4())
@@ -138,12 +140,13 @@ async def plan_trip_sync(request: PlanRequest):
         final_plan = build_final_plan(output)
 
         try:
-            TripService().create_trip(final_plan)
+            trip_service = TripService()
+            saved_trip = trip_service.create_trip(trip_service.travelplan_to_trip(final_plan, user_id=user.id if user else None))
         except Exception:
             logger.exception("Failed to persist generated TravelPlan for thread_id=%s", thread_id)
             return JSONResponse(status_code=500, content={"error": GENERIC_ERROR_MESSAGE})
 
-        return {"thread_id": thread_id, "state": "complete", "plan": final_plan}
+        return {"thread_id": thread_id, "state": "complete", "trip_id": saved_trip.id, "plan": final_plan}
     except Exception as exc:
         logger.exception("Unexpected error in /plan request")
         return JSONResponse(status_code=500, content={"error": GENERIC_ERROR_MESSAGE})
@@ -161,7 +164,7 @@ async def get_graph_png():
         return JSONResponse(status_code=500, content={"error": GENERIC_ERROR_MESSAGE})
 
 @app.post("/plan/stream")
-async def plan_trip_stream(request: PlanRequest):
+async def plan_trip_stream(request: PlanRequest, user: User | None = Depends(get_optional_current_user)):
     """SSE Streaming endpoint for live updates."""
     thread_id = request.thread_id or str(uuid.uuid4())
     
@@ -231,8 +234,16 @@ async def plan_trip_stream(request: PlanRequest):
                         },
                     )
                 else:
+                    final_plan = build_final_plan(final_state)
+                    trip_service = TripService()
+                    saved_trip = trip_service.create_trip(
+                        trip_service.travelplan_to_trip(final_plan, user_id=user.id if user else None)
+                    )
                     yield format_sse_event(
-                        "done", "System", "Workflow complete.", data=build_final_plan(final_state)
+                        "done",
+                        "System",
+                        "Workflow complete.",
+                        data={**final_plan.model_dump(mode="json"), "trip_id": saved_trip.id},
                     )
             else:
                 yield format_sse_event("error", "System", "Failed to generate plan.")

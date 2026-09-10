@@ -104,6 +104,8 @@ Create a `.env` file in the root directory:
 
 ## 8. API Flow
 
+Authenticated trip endpoints are scoped to the current user. A trip owned by another user returns `404 Not Found` rather than `403`, consistently for reads, updates, deletion, and day regeneration, so resource existence is not disclosed.
+
 1. The user inputs a query via the React UI.
 2. The UI sends a POST request to the FastAPI backend, initiating a streaming SSE connection.
 3. FastAPI invokes the LangGraph compiled graph.

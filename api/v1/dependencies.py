@@ -16,3 +16,12 @@ def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(
         return AuthService().current_user(db, credentials.credentials)
     except AuthError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required.") from exc
+
+
+def get_optional_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bearer), db: Session = Depends(get_db)) -> User | None:
+    if not credentials:
+        return None
+    try:
+        return AuthService().current_user(db, credentials.credentials)
+    except AuthError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required.") from exc

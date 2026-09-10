@@ -10,7 +10,7 @@ const DAY_THEMES = [
   'linear-gradient(135deg, #f5a62320, #ff6b6b10)',
 ]
 
-export default function DayCard({ day, index, currency }) {
+export default function DayCard({ day, index, currency, onRegenerate }) {
   const [open, setOpen] = useState(true)
   const [selectedPlace, setSelectedPlace] = useState(null)
 
@@ -81,6 +81,7 @@ export default function DayCard({ day, index, currency }) {
         </div>
         <div className="day-header-right">
           <span className="day-cost">{formatCurrency(calculatedTotal, currency)}</span>
+          {onRegenerate && <button type="button" className="text-button" onClick={(event) => { event.stopPropagation(); onRegenerate(day_number) }}>Regenerate</button>}
           <span className={`chevron ${open ? 'open' : ''}`}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
               <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>

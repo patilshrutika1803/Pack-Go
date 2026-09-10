@@ -68,6 +68,32 @@ def test_post_api_v1_trips_creates_trip(api_client):
     assert payload["budget_currency"] == "INR"
 
 
+def test_trip_access_is_owner_scoped_and_unauthenticated_access_is_rejected(api_client):
+    created = api_client.post("/api/v1/trips", json=build_trip_payload()).json()
+    trip_id = created["id"]
+    owner_headers = dict(api_client.headers)
+    second_registration = api_client.post(
+        "/api/v1/auth/register",
+        json={"name": "Second Traveler", "email": "second-trip@example.com", "password": "password123"},
+    ).json()
+    api_client.headers.update({"Authorization": f"Bearer {second_registration['access_token']}"})
+
+    assert api_client.get("/api/v1/trips").json() == []
+    assert api_client.get(f"/api/v1/trips/{trip_id}").status_code == 404
+    assert api_client.patch(f"/api/v1/trips/{trip_id}", json={"title": "Stolen"}).status_code == 404
+    assert api_client.delete(f"/api/v1/trips/{trip_id}").status_code == 404
+
+    api_client.headers.clear()
+    assert api_client.get("/api/v1/trips").status_code == 401
+    api_client.headers.update(owner_headers)
+    assert api_client.get(f"/api/v1/trips/{trip_id}").status_code == 200
+
+
+def test_trip_creation_requires_authentication(api_client):
+    api_client.headers.clear()
+    assert api_client.post("/api/v1/trips", json=build_trip_payload()).status_code == 401
+
+
 def test_get_api_v1_trips_returns_newest_first(api_client):
     first_response = api_client.post("/api/v1/trips", json=build_trip_payload(title="First Trip"))
     second_response = api_client.post("/api/v1/trips", json=build_trip_payload(title="Second Trip"))

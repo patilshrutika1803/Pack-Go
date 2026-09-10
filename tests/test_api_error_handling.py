@@ -66,6 +66,59 @@ def test_sse_error_event_does_not_expose_raw_exception_details(monkeypatch):
     assert "raw stack trace or provider details should stay server-side" not in body
 
 
+def test_sse_plan_completion_serializes_travelplan(monkeypatch):
+    valid_plan = TravelPlan(
+        preferences=UserPreferences(
+            destination="Goa",
+            duration=2,
+            total_budget=30000.0,
+            budget_currency="INR",
+            travel_style="balanced",
+        ),
+        itinerary=[],
+        revision_history=[],
+        data_freshness={},
+    )
+
+    class FakeGraph:
+        def stream(self, payload, config):
+            yield {"Supervisor": {}}
+
+        def get_state(self, config):
+            return type("State", (), {"values": {"intent": "plan_trip"}})()
+
+    class FakeGraphBuilder:
+        def build_graph(self):
+            return FakeGraph()
+
+    class FakeTrip:
+        id = "trip-sse-1"
+
+    class FakeTripService:
+        def travelplan_to_trip(self, travel_plan, user_id=None):
+            assert travel_plan is valid_plan
+            return travel_plan
+
+        def create_trip(self, trip):
+            return FakeTrip()
+
+    monkeypatch.setattr(main, "GraphBuilder", FakeGraphBuilder)
+    monkeypatch.setattr(main, "validate_final_state", lambda state: [])
+    monkeypatch.setattr(main, "build_final_plan", lambda state: valid_plan)
+    monkeypatch.setattr(main, "TripService", FakeTripService)
+
+    response = client.post(
+        "/plan/stream",
+        json={"question": "Weekend in Goa", "remember_me": False},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert '"status": "done"' in response.text
+    assert '"trip_id": "trip-sse-1"' in response.text
+    assert main.GENERIC_ERROR_MESSAGE not in response.text
+
+
 def test_cors_allows_localhost_frontend_origin():
     response = client.options(
         "/plan",
@@ -205,6 +258,48 @@ def test_plan_persists_valid_travelplan_to_database(monkeypatch, tmp_path):
     assert trips[0].destination == "Kyoto, Japan"
     assert trips[0].title == "Kyoto, Japan"
     assert trips[0].travel_style == "balanced"
+
+
+def test_authenticated_plan_persistence_assigns_current_user(monkeypatch, tmp_path):
+    db_file = tmp_path / "owned_plan.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_file.as_posix()}")
+    monkeypatch.setenv("PACK_GO_JWT_SECRET", "local-development-secret-1234567890")
+
+    import database.connection as connection_module
+    import database as database_module
+    connection_module = importlib.reload(connection_module)
+    importlib.reload(database_module)
+    from database.base import Base
+    Base.metadata.create_all(bind=connection_module.engine)
+    import main as main_module
+    main_module = importlib.reload(main_module)
+
+    auth_client = TestClient(main_module.app)
+    registration = auth_client.post(
+        "/api/v1/auth/register",
+        json={"name": "Plan Owner", "email": "plan-owner@example.com", "password": "password123"},
+    )
+    client = TestClient(main_module.app, headers={"Authorization": f"Bearer {registration.json()['access_token']}"})
+    valid_preferences = UserPreferences(destination="Kyoto", duration=2, total_budget=500, budget_currency="INR", travel_style="balanced")
+
+    class FakeGraph:
+        def invoke(self, payload, config):
+            return {"intent": "plan_trip", "preferences": valid_preferences, "itinerary": [], "failed_agents": [], "failure_reasons": {}}
+
+    monkeypatch.setattr(main_module.GraphBuilder, "build_graph", lambda self: FakeGraph())
+    monkeypatch.setattr(main_module, "validate_final_state", lambda output: [])
+    monkeypatch.setattr(
+        main_module,
+        "build_final_plan",
+        lambda output: TravelPlan(preferences=valid_preferences, itinerary=[], revision_history=[], data_freshness={}),
+    )
+    response = client.post("/plan", json={"question": "Plan Kyoto"})
+
+    assert response.status_code == 200
+    from services.trip_service import TripService
+    trips = TripService().list_trips(user_id=registration.json()["user"]["id"])
+    assert len(trips) == 1
+    assert trips[0].user_id == registration.json()["user"]["id"]
 
 
 def test_plan_does_not_persist_invalid_workflow_output(monkeypatch, tmp_path):

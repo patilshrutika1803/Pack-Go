@@ -3,16 +3,18 @@ import ChatInput from '../components/ChatInput'
 import MessageBubble from '../components/MessageBubble'
 import PlanCard from '../components/PlanCard'
 import HeroSection from '../components/HeroSection'
+import { useAuth } from '../auth/useAuth'
 
 const AGENT_ORDER = ['Supervisor', 'PreferenceExtractor', 'ResearchAgent', 'WeatherAgent', 'BudgetAgent', 'ItineraryAgent', 'CriticAgent']
 
 export default function PlannerPage() {
+  const { token } = useAuth()
   const [messages, setMessages] = useState([]); const [agents, setAgents] = useState([]); const [currentAgent, setCurrentAgent] = useState(null); const [plan, setPlan] = useState(null); const [loading, setLoading] = useState(false); const [error, setError] = useState(null); const bottomRef = useRef(null)
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, plan])
   const handleSubmit = async (query) => {
     if (!query.trim() || loading) return
     setLoading(true); setError(null); setPlan(null); setAgents([]); setCurrentAgent(null); setMessages(prev => [...prev, { role: 'user', content: query, id: Date.now() }])
-    try { const response = await fetch('/plan/stream', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: query, thread_id: crypto.randomUUID(), remember_me: true }) }); if (!response.ok) throw new Error('Unable to start your plan.')
+    try { const response = await fetch('/plan/stream', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ question: query, thread_id: crypto.randomUUID(), remember_me: true }) }); if (!response.ok) throw new Error('Unable to start your plan.')
       const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ''
       while (true) { const { value, done } = await reader.read(); if (done) break; buffer += decoder.decode(value, { stream: true }); const lines = buffer.split('\n\n'); buffer = lines.pop(); for (const chunk of lines) { const line = chunk.trim(); if (!line.startsWith('data: ')) continue; try { const event = JSON.parse(line.slice(6)); const { status, agent, message, data } = event; if (status === 'running' && agent && agent !== 'System') { setCurrentAgent(agent); setAgents(prev => prev.includes(agent) ? prev : [...prev, agent]) } if (status === 'done') { setCurrentAgent(null); setPlan(data); setLoading(false) } if (status === 'error') { setError(message); setLoading(false) } } catch { /* Ignore incomplete SSE chunks. */ } } }
     } catch (err) { setError(err.message); setLoading(false) }

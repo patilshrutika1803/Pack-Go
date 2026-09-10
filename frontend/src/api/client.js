@@ -13,12 +13,15 @@ function authErrorMessage(path, detail) {
 }
 
 async function request(path, options = {}) {
+  const token = localStorage.getItem('pack-go-token')
+  const authorization = token && !options.headers?.Authorization ? { Authorization: `Bearer ${token}` } : {}
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    headers: { 'Content-Type': 'application/json', ...authorization, ...(options.headers || {}) },
   })
   const body = await response.json().catch(() => ({}))
   if (!response.ok) {
+    if (response.status === 401 && !path.startsWith('/auth/')) window.dispatchEvent(new Event('pack-go-session-expired'))
     const detail = body.detail || body.error
     const message = path.startsWith('/auth/')
       ? authErrorMessage(path, detail)
@@ -42,4 +45,8 @@ export const authApi = {
 export const tripsApi = {
   list: () => request('/trips'),
   get: (id) => request(`/trips/${id}`),
+  create: (payload) => request('/trips', { method: 'POST', body: JSON.stringify(payload) }),
+  update: (id, payload) => request(`/trips/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  remove: (id) => request(`/trips/${id}`, { method: 'DELETE' }),
+  regenerateDay: (id, dayNumber) => request(`/trips/${id}/days/${dayNumber}/regenerate`, { method: 'PATCH' }),
 }

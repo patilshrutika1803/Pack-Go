@@ -21,6 +21,16 @@ export function AuthProvider({ children }) {
   }, [user, token, refreshToken])
 
   useEffect(() => {
+    const handleSessionExpired = () => {
+      setUser(null)
+      setToken(null)
+      setRefreshToken(null)
+    }
+    window.addEventListener('pack-go-session-expired', handleSessionExpired)
+    return () => window.removeEventListener('pack-go-session-expired', handleSessionExpired)
+  }, [])
+
+  useEffect(() => {
     let active = true
     async function restore() {
       if (!token && !refreshToken) return setIsLoading(false)

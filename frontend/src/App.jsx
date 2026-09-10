@@ -8,6 +8,7 @@ import PlannerPage from './pages/PlannerPage'
 import ExplorePage from './pages/ExplorePage'
 import TripsPage from './pages/TripsPage'
 import ProfilePage from './pages/ProfilePage'
+import TripDetailPage from './pages/TripDetailPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import './App.css'
@@ -29,7 +30,7 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route element={<ProtectedRoute />}>
               <Route path="/trips" element={<TripsPage />} />
-              <Route path="/trips/:tripId" element={<TripsPage />} />
+              <Route path="/trips/:tripId" element={<TripDetailPage />} />
               <Route path="/profile" element={<ProfilePage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

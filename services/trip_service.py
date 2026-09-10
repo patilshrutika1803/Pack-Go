@@ -203,6 +203,7 @@ class TripService:
         self,
         travel_plan: TravelPlan | dict[str, Any],
         trip_id: str | None = None,
+        user_id: str | None = None,
     ) -> Trip:
         if isinstance(travel_plan, dict):
             travel_plan = TravelPlan.model_validate(travel_plan)
@@ -216,6 +217,7 @@ class TripService:
 
         return Trip(
             id=trip_id or str(uuid4()),
+            user_id=user_id,
             title=(preferences.destination if preferences and preferences.destination else "Untitled Trip"),
             destination=(preferences.destination if preferences and preferences.destination else ""),
             duration=(preferences.duration if preferences else 0),
