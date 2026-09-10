@@ -5,6 +5,7 @@ import os
 import uuid
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -12,6 +13,7 @@ from pydantic import BaseModel
 from agent.agentic_workflow import GraphBuilder, build_final_plan, validate_final_state
 from api.v1.trips import router as api_v1_router
 from api.v1.auth import router as auth_router
+from api.v1.users import router as users_router
 from services.trip_service import TripService
 from utils.streaming import format_sse_event
 from memory.long_term import LongTermMemory
@@ -35,6 +37,7 @@ app = FastAPI(title="PACK & GO API")
 
 app.include_router(api_v1_router)
 app.include_router(auth_router)
+app.include_router(users_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,9 +56,26 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     )
 
 
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(request: Request, exc: RequestValidationError):
+    if request.url.path.startswith("/api/v1/auth/"):
+        first_error = exc.errors()[0] if exc.errors() else {}
+        field = first_error.get("loc", ["request"])[-1]
+        message = first_error.get("msg", "Invalid authentication request.")
+        return JSONResponse(status_code=422, content={"error": f"{field}: {message}"})
+    return JSONResponse(status_code=422, content={"error": "Request validation failed."})
+
+
 @app.exception_handler(Exception)
 async def generic_exception_handler(request, exc: Exception):
     logger.exception("Unhandled server error during %s %s", request.method, request.url.path)
+    if request.url.path.startswith("/api/v1/auth/"):
+        message = "Unable to create your account right now. Please try again." if request.url.path.endswith("/register") else "Unable to complete authentication right now. Please try again."
+        return JSONResponse(
+            status_code=500,
+            content={"error": message},
+        )
     return JSONResponse(
         status_code=500,
         content={"error": GENERIC_ERROR_MESSAGE},

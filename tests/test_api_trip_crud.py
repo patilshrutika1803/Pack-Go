@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 def api_client(tmp_path, monkeypatch):
     db_file = tmp_path / "api_v1_trips.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_file.as_posix()}")
+    monkeypatch.setenv("PACK_GO_JWT_SECRET", "local-development-secret-1234567890")
 
     import database.connection as connection_module
     import database as database_module
@@ -23,7 +24,13 @@ def api_client(tmp_path, monkeypatch):
 
     main_module = importlib.reload(main_module)
 
-    return TestClient(main_module.app)
+    client = TestClient(main_module.app)
+    registration = client.post(
+        "/api/v1/auth/register",
+        json={"name": "Trip Tester", "email": "trip-tester@example.com", "password": "password123"},
+    )
+    client.headers.update({"Authorization": f"Bearer {registration.json()['access_token']}"})
+    return client
 
 
 def build_trip_payload(**overrides):

@@ -113,3 +113,39 @@ class AuthResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     user: UserResponse
+    verification_token: str | None = None
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str = Field(min_length=8, max_length=128)
+
+
+class PreferenceUpdateRequest(BaseModel):
+    travel_style: str | None = None
+    interests: list[str] | None = None
+    things_to_avoid: list[str] | None = None
+    preferred_budget_min: float | None = None
+    preferred_budget_max: float | None = None
+    preferred_currency: str | None = None
+    preferred_trip_duration: int | None = None
+    is_domestic: bool | None = None
+
+
+class PreferenceResponse(PreferenceUpdateRequest):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    user_id: str

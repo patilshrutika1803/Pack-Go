@@ -9,11 +9,12 @@ import ExplorePage from './pages/ExplorePage'
 import TripsPage from './pages/TripsPage'
 import ProfilePage from './pages/ProfilePage'
 import ProtectedRoute from './routes/ProtectedRoute'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import './App.css'
 
 export default function App() {
   const location = useLocation()
-  const isAuthPage = location.pathname === '/login' || location.pathname === '/register'
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/register' || location.pathname === '/forgot-password'
   return (
     <AuthProvider>
       <div className="site-shell">
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="/plan" element={<PlannerPage />} />
             <Route path="/login" element={<AuthPage mode="login" />} />
             <Route path="/register" element={<AuthPage mode="register" />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route element={<ProtectedRoute />}>
               <Route path="/trips" element={<TripsPage />} />
               <Route path="/trips/:tripId" element={<TripsPage />} />

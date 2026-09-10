@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
+import { authApi } from '../api/client'
 
 export default function AuthPage({ mode }) {
   const isRegister = mode === 'register'
@@ -10,14 +11,15 @@ export default function AuthPage({ mode }) {
   const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' })
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
+  const [verificationToken, setVerificationToken] = useState('')
+  const [verificationMessage, setVerificationMessage] = useState('')
   const next = new URLSearchParams(location.search).get('next') || '/trips'
   const update = (event) => setForm({ ...form, [event.target.name]: event.target.value })
   const switchPath = (path) => `${path}${location.search}`
   const safeError = (message) => {
     if (!isRegister) return "Email or password doesn't look right. Please try again."
-    return /database|sql|traceback|exception|integrity/i.test(message || '')
-      ? 'We could not create your account. Please check your details and try again.'
-      : message
+    if (/already exists/i.test(message || '')) return 'An account with this email already exists.'
+    return message || 'Unable to create your account right now. Please try again.'
   }
   const submit = async (event) => {
     event.preventDefault()
@@ -25,8 +27,13 @@ export default function AuthPage({ mode }) {
     if (isRegister && form.password !== form.confirmPassword) return setError('Passwords do not match.')
     if (form.password.length < 8) return setError('Use at least 8 characters for your password.')
     try {
-      await (isRegister ? register(form) : login({ email: form.email, password: form.password }))
-      navigate(next, { replace: true })
+      const result = await (isRegister ? register(form) : login({ email: form.email, password: form.password }))
+      if (isRegister && result.verification_token) {
+        setVerificationToken(result.verification_token)
+        setVerificationMessage('Account created. Verify your email before continuing.')
+      } else {
+        navigate(next, { replace: true })
+      }
     } catch (err) {
       setError(safeError(err.message))
     }
@@ -69,8 +76,9 @@ export default function AuthPage({ mode }) {
             {error && <p className="form-error" role="alert">{error}</p>}
             <button className="button button-primary submit-button" disabled={isLoading}>{isLoading ? 'Loading...' : isRegister ? 'Create account →' : 'Log in →'}</button>
           </form>
+          {isRegister && verificationToken && <div className="auth-form-meta"><span>{verificationMessage}</span><button type="button" className="text-button" onClick={async () => { try { await authApi.verifyEmail(verificationToken); setVerificationMessage('Email verified successfully.') } catch (err) { setError(err.message || 'Unable to verify your email right now. Please try again.') } }}>Verify email</button></div>}
           {!isRegister && <>
-            <div className="auth-form-meta"><span>Secure access to your trips</span><span className="auth-link-muted">Forgot password?</span></div>
+            <div className="auth-form-meta"><span>Secure access to your trips</span><Link className="auth-link-muted" to="/forgot-password">Forgot password?</Link></div>
             <div className="auth-divider"><span>OR</span></div>
             <button className="button google-button" type="button" disabled><span className="google-mark">G</span> Continue with Google <small>Coming soon</small></button>
           </>}

@@ -59,41 +59,49 @@ class TripService:
         finally:
             session.close()
 
-    def get_trip(self, trip_id: str) -> Trip | None:
+    def get_trip(self, trip_id: str, user_id: str | None = None) -> Trip | None:
         from database.connection import SessionLocal
 
         session = SessionLocal()
 
         try:
-            return session.get(Trip, trip_id)
+            statement = select(Trip).where(Trip.id == trip_id)
+            if user_id is not None:
+                statement = statement.where(Trip.user_id == user_id)
+            return session.scalar(statement)
         except SQLAlchemyError as exc:
             raise RuntimeError("Failed to retrieve trip.") from exc
         finally:
             session.close()
 
-    def list_trips(self) -> list[Trip]:
+    def list_trips(self, user_id: str | None = None) -> list[Trip]:
         from database.connection import SessionLocal
 
         session = SessionLocal()
 
         try:
             statement = select(Trip).order_by(Trip.created_at.desc(), Trip.id.desc())
+            if user_id is not None:
+                statement = statement.where(Trip.user_id == user_id)
             return list(session.scalars(statement).all())
         except SQLAlchemyError as exc:
             raise RuntimeError("Failed to list trips.") from exc
         finally:
             session.close()
 
-    def update_trip(self, trip_id: str, updates: dict[str, Any] | None) -> Trip | None:
+    def update_trip(self, trip_id: str, updates: dict[str, Any] | None, user_id: str | None = None) -> Trip | None:
         if not updates:
-            return self.get_trip(trip_id)
+            return self.get_trip(trip_id, user_id=user_id)
 
         from database.connection import SessionLocal
 
         session = SessionLocal()
 
         try:
-            trip = session.get(Trip, trip_id)
+            statement = select(Trip).where(Trip.id == trip_id)
+            if user_id is not None:
+                statement = statement.where(Trip.user_id == user_id)
+            trip = session.scalar(statement)
             if trip is None:
                 return None
 
@@ -113,13 +121,16 @@ class TripService:
         finally:
             session.close()
 
-    def delete_trip(self, trip_id: str) -> bool:
+    def delete_trip(self, trip_id: str, user_id: str | None = None) -> bool:
         from database.connection import SessionLocal
 
         session = SessionLocal()
 
         try:
-            trip = session.get(Trip, trip_id)
+            statement = select(Trip).where(Trip.id == trip_id)
+            if user_id is not None:
+                statement = statement.where(Trip.user_id == user_id)
+            trip = session.scalar(statement)
             if trip is None:
                 return False
 
@@ -132,13 +143,16 @@ class TripService:
         finally:
             session.close()
 
-    def regenerate_day(self, trip_id: str, day_number: int) -> dict[str, Any]:
+    def regenerate_day(self, trip_id: str, day_number: int, user_id: str | None = None) -> dict[str, Any]:
         from database.connection import SessionLocal
 
         session = SessionLocal()
 
         try:
-            trip = session.get(Trip, trip_id)
+            statement = select(Trip).where(Trip.id == trip_id)
+            if user_id is not None:
+                statement = statement.where(Trip.user_id == user_id)
+            trip = session.scalar(statement)
             if trip is None:
                 raise TripNotFoundError(f"Trip {trip_id} was not found.")
 
