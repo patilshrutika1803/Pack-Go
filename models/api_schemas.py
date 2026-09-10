@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class TripCreateRequest(BaseModel):
@@ -134,18 +134,35 @@ class ResetPasswordRequest(BaseModel):
 
 
 class PreferenceUpdateRequest(BaseModel):
-    travel_style: str | None = None
-    interests: list[str] | None = None
+    model_config = ConfigDict(extra="forbid")
+
+    travel_style: Literal["Relaxation", "Balanced", "Adventure", "Luxury", "Budget"] | None = None
+    interests: list[Literal["Beach", "Food", "Culture", "Nature", "Adventure", "Wellness", "Nightlife"]] | None = None
     things_to_avoid: list[str] | None = None
-    preferred_budget_min: float | None = None
-    preferred_budget_max: float | None = None
+    budget_preference: Literal["Budget", "Moderate", "Luxury", "Flexible"] | None = None
+    hotel_preference: Literal["Budget", "Mid-range", "Luxury", "Boutique", "Hostel"] | None = None
+    food_preference: Literal["Local", "Vegetarian", "Street food", "Fine dining", "Anything"] | None = None
+    preferred_destinations: list[str] | None = None
+    preferred_budget_min: float | None = Field(default=None, ge=0)
+    preferred_budget_max: float | None = Field(default=None, ge=0)
     preferred_currency: str | None = None
-    preferred_trip_duration: int | None = None
+    preferred_trip_duration: int | None = Field(default=None, ge=1, le=365)
     is_domestic: bool | None = None
+
+    @model_validator(mode="after")
+    def validate_budget_range(self):
+        if self.preferred_budget_min is not None and self.preferred_budget_max is not None and self.preferred_budget_min > self.preferred_budget_max:
+            raise ValueError("preferred_budget_min must not exceed preferred_budget_max")
+        return self
 
 
 class PreferenceResponse(PreferenceUpdateRequest):
     model_config = ConfigDict(from_attributes=True)
 
+    travel_style: str | None = None
+    interests: list[str] | None = None
+    budget_preference: str | None = None
+    hotel_preference: str | None = None
+    food_preference: str | None = None
     id: str
     user_id: str

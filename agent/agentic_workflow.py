@@ -49,6 +49,7 @@ class AgentState(TypedDict):
     intent: str
     chat_response: Optional[str]
     past_context: str
+    saved_preferences_context: Optional[Dict[str, Any]]
     preferences: Optional[UserPreferences]
     research_data: Optional[Dict[str, Any]]
     weather_info: Optional[WeatherInfo]

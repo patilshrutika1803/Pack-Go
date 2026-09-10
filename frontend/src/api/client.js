@@ -1,5 +1,8 @@
 const API_BASE = '/api/v1'
 const LEGACY_PLAN_ERROR = 'Unable to generate the travel plan at this time. Please try again.'
+const PREFERENCE_ERROR = 'Unable to save your preferences. Please try again.'
+const PREFERENCE_VALIDATION_ERROR = 'Some preference values are invalid. Please check your selections.'
+const PREFERENCE_FIELDS = ['travel_style', 'interests', 'things_to_avoid', 'budget_preference', 'hotel_preference', 'food_preference', 'preferred_destinations', 'preferred_budget_min', 'preferred_budget_max', 'preferred_currency', 'preferred_trip_duration', 'is_domestic']
 
 function authErrorMessage(path, detail) {
   if (Array.isArray(detail)) {
@@ -25,7 +28,11 @@ async function request(path, options = {}) {
     const detail = body.detail || body.error
     const message = path.startsWith('/auth/')
       ? authErrorMessage(path, detail)
-      : detail || 'Something went wrong. Please try again.'
+      : path.startsWith('/users/me/preferences') && response.status === 422
+        ? PREFERENCE_VALIDATION_ERROR
+      : path.startsWith('/users/me/preferences') && (!detail || detail === LEGACY_PLAN_ERROR)
+        ? PREFERENCE_ERROR
+        : detail || 'Something went wrong. Please try again.'
     throw new Error(message)
   }
   return body
@@ -49,4 +56,12 @@ export const tripsApi = {
   update: (id, payload) => request(`/trips/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   remove: (id) => request(`/trips/${id}`, { method: 'DELETE' }),
   regenerateDay: (id, dayNumber) => request(`/trips/${id}/days/${dayNumber}/regenerate`, { method: 'PATCH' }),
+}
+
+export const preferencesApi = {
+  get: () => request('/users/me/preferences'),
+  update: (payload) => request('/users/me/preferences', {
+    method: 'PATCH',
+    body: JSON.stringify(Object.fromEntries(PREFERENCE_FIELDS.filter((field) => field in payload).map((field) => [field, payload[field]]))),
+  }),
 }

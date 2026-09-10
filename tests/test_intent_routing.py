@@ -6,6 +6,7 @@ from agent import agentic_workflow as workflow_module
 from agent import supervisor as supervisor_module
 from models.schemas import SupervisorDecision
 from models.schemas import UserPreferences
+from agent import preference_extractor as preference_extractor_module
 
 
 def _run_graph(monkeypatch, intent, query="Tell me something interesting about Rajasthan"):
@@ -196,3 +197,39 @@ def test_general_travel_question_uses_general_chat_route(monkeypatch):
     assert state["query"] == "What is the best time to visit Goa?"
     assert calls[-1] == "ChatAgent"
     assert "PreferenceExtractor" not in calls
+
+
+def test_preference_extractor_receives_saved_preferences_without_provider_call(monkeypatch):
+    captured = {}
+
+    class Memory:
+        def retrieve_past_trips(self, query):
+            return "No previous context found."
+
+    def mocked_provider(_chain_builder, messages):
+        captured["system"] = messages[0].content
+        captured["query"] = messages[1].content
+        return UserPreferences(
+            destination="Goa",
+            duration=3,
+            total_budget=20000,
+            budget_currency="INR",
+            travel_style="Relaxation",
+            interests=["Beach", "Food"],
+        )
+
+    monkeypatch.setattr(preference_extractor_module, "LongTermMemory", Memory)
+    monkeypatch.setattr(preference_extractor_module, "invoke_with_fallback", mocked_provider)
+    result = preference_extractor_module.preference_extractor_node({
+        "query": "3 days in Goa",
+        "saved_preferences_context": {
+            "travel_style": "Relaxation",
+            "hotel_preference": "Budget",
+            "food_preference": "Local",
+        },
+    })
+
+    assert result["preferences"].travel_style == "Relaxation"
+    assert captured["query"] == "3 days in Goa"
+    assert "hotel_preference" in captured["system"]
+    assert "explicit instructions in the current query always take priority" in captured["system"]

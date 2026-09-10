@@ -11,6 +11,7 @@ import ProfilePage from './pages/ProfilePage'
 import TripDetailPage from './pages/TripDetailPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import PreferencesPage from './pages/PreferencesPage'
 import './App.css'
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
               <Route path="/trips" element={<TripsPage />} />
               <Route path="/trips/:tripId" element={<TripDetailPage />} />
               <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/preferences" element={<PreferencesPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

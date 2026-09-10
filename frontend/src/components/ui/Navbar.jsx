@@ -15,7 +15,7 @@ export default function Navbar() {
         <NavLink to="/plan" onClick={close}>Plan a trip</NavLink>
         <NavLink to="/trips" onClick={close}>My trips</NavLink>
         <span className="nav-divider" />
-        {isAuthenticated ? <><NavLink to="/profile" onClick={close}>{user?.name || 'Profile'}</NavLink><button className="nav-logout" onClick={() => { logout(); close() }}>Log out</button></> : <Link className="button button-small" to="/login" onClick={close}>Log in</Link>}
+        {isAuthenticated ? <><NavLink to="/profile" onClick={close}>{user?.name || 'Profile'}</NavLink><NavLink to="/preferences" onClick={close}>Preferences</NavLink><button className="nav-logout" onClick={() => { logout(); close() }}>Log out</button></> : <Link className="button button-small" to="/login" onClick={close}>Log in</Link>}
       </nav>
     </header>
   )

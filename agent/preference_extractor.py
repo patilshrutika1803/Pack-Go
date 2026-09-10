@@ -44,7 +44,12 @@ def preference_extractor_node(state: Dict[str, Any]) -> Dict[str, Any]:
         logger.warning(f"Failed to retrieve long term memory: {e}")
         past_context = "No previous context found."
 
-    system_content = f"{SYSTEM_PROMPT}\n\n[PAST USER CONTEXT]\n{past_context}"
+    saved_preferences = state.get("saved_preferences_context") or {}
+    saved_context = saved_preferences or "No saved preferences found."
+    system_content = (
+        f"{SYSTEM_PROMPT}\n\n[PAST USER CONTEXT]\n{past_context}"
+        f"\n\n[SAVED USER PREFERENCES]\n{saved_context}"
+    )
     messages = [
         SystemMessage(content=system_content),
         HumanMessage(content=user_query)
