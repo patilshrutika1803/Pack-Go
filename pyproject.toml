@@ -5,3 +5,6 @@ description = "AI-powered Multi-Agent Travel Planner using LangGraph, FastAPI, R
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

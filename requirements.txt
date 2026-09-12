@@ -16,6 +16,8 @@ langgraph
 langgraph-checkpoint
 langchain-google-community[places]
 chromadb
+pypdf>=4.3.1
+sentence-transformers>=3.1.1
 sse-starlette
 langchain-google-genai
 SQLAlchemy==2.0.51

@@ -1,6 +1,6 @@
 from database.base import Base
 from database.connection import SessionLocal, engine, get_db
-from database.models import PasswordResetToken, RefreshToken, Trip, User, UserPreference, VerificationToken
+from database.models import KnowledgeSource, PasswordResetToken, RefreshToken, Trip, User, UserPreference, VerificationToken
 
 __all__ = [
     "Base",
@@ -13,4 +13,5 @@ __all__ = [
     "RefreshToken",
     "VerificationToken",
     "PasswordResetToken",
+    "KnowledgeSource",
 ]

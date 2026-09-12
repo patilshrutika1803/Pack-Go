@@ -83,3 +83,6 @@ pack_go.db
 # ----------------------------
 chroma_db/
 # memory/
+# Reference implementations
+reference/
+test-data/
