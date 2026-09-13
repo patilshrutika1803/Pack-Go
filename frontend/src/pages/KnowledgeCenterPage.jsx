@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { knowledgeApi } from '../api/client'
 
 const EMPTY_FORM = { display_name: '', destination: '', category: 'travel_guide', document_type: 'destination_guide' }
@@ -11,19 +11,21 @@ export default function KnowledgeCenterPage() {
   const [state, setState] = useState('loading')
   const [message, setMessage] = useState('')
   const [busyId, setBusyId] = useState(null)
+  const filtersRef = useRef(filters)
+  filtersRef.current = filters
 
-  const loadDocuments = async () => {
+  const loadDocuments = useCallback(async () => {
     setState('loading')
     try {
-      setDocuments(await knowledgeApi.list(filters))
+      setDocuments(await knowledgeApi.list(filtersRef.current))
       setState('ready')
     } catch (error) {
       setMessage(error.message)
       setState('error')
     }
-  }
+  }, [])
 
-  useEffect(() => { loadDocuments() }, [])
+  useEffect(() => { loadDocuments() }, [loadDocuments])
 
   const updateFilter = (event) => setFilters((current) => ({ ...current, [event.target.name]: event.target.value }))
   const updateForm = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }))
@@ -61,7 +63,7 @@ export default function KnowledgeCenterPage() {
     {message && <div className="knowledge-message" role="status">{message}</div>}
     <div className="knowledge-layout">
       <form className="knowledge-upload" onSubmit={upload}><div className="section-title-row"><h2>Upload source</h2><span className="knowledge-mark">PDF</span></div><label>PDF file<input type="file" accept="application/pdf,.pdf" onChange={(event) => setFile(event.target.files?.[0] || null)} /></label><label>Display name<input name="display_name" value={form.display_name} onChange={updateForm} required placeholder="Goa Travel Guide" /></label><div className="knowledge-form-grid"><label>Destination<input name="destination" value={form.destination} onChange={updateForm} required placeholder="Goa" /></label><label>Category<input name="category" value={form.category} onChange={updateForm} required /></label><label>Document type<input name="document_type" value={form.document_type} onChange={updateForm} required /></label></div><button className="button button-primary" disabled={state === 'uploading'}>{state === 'uploading' ? 'Indexing…' : 'Upload and index'}</button></form>
-      <div className="knowledge-list"><div className="knowledge-list-heading"><div><p className="eyebrow">Document library</p><h2>Indexed sources</h2></div><button className="button button-quiet" onClick={loadDocuments} disabled={state === 'loading'}>Refresh</button></div><div className="knowledge-filters"><input name="search" value={filters.search} onChange={updateFilter} placeholder="Search documents" /><input name="destination" value={filters.destination} onChange={updateFilter} placeholder="Destination" /><input name="category" value={filters.category} onChange={updateFilter} placeholder="Category" /><button className="button button-small" onClick={loadDocuments}>Filter</button></div>{state === 'loading' && <div className="knowledge-empty">Loading sources…</div>}{state === 'error' && <div className="knowledge-empty"><strong>Sources could not be loaded.</strong><button className="text-button" onClick={loadDocuments}>Try again</button></div>}{state === 'ready' && !documents.length && <div className="knowledge-empty">No indexed documents yet.</div>}{state === 'ready' && documents.map((document) => <article className="knowledge-document" key={document.id}><div><div className="knowledge-document-title"><h3>{document.display_name}</h3><span className={`knowledge-status knowledge-status-${document.status}`}>{document.status}</span></div><p>{document.filename} · {document.destination} · {document.category}</p><small>{document.page_count} pages · {document.chunk_count} chunks</small></div><div className="knowledge-actions"><button className="text-button" disabled={busyId === document.id} onClick={() => reindex(document.id)}>Re-index</button><button className="text-button danger" disabled={busyId === document.id} onClick={() => remove(document)}>Delete</button></div></article>)}</div>
+      <div className="knowledge-list"><div className="knowledge-list-heading"><div><p className="eyebrow">Document library</p><h2>Indexed sources</h2></div><button className="button button-quiet" onClick={loadDocuments} disabled={state === 'loading'}>Refresh</button></div><div className="knowledge-filters"><input name="search" value={filters.search} onChange={updateFilter} placeholder="Search documents" /><input name="destination" value={filters.destination} onChange={updateFilter} placeholder="Destination" /><input name="category" value={filters.category} onChange={updateFilter} placeholder="Category" /><button className="button button-small" onClick={loadDocuments}>Filter</button></div>{state === 'loading' && <div className="knowledge-empty">Loading sources…</div>}{state === 'error' && <div className="knowledge-empty"><strong>Sources could not be loaded.</strong><button className="text-button" onClick={loadDocuments}>Try again</button></div>}{state === 'ready' && !documents.length && <div className="knowledge-empty">No indexed documents yet.</div>}{state === 'ready' && documents.map((document) => <article className="knowledge-document" key={document.id}><div><div className="knowledge-document-title"><h3>{document.display_name}</h3><span className={`knowledge-status knowledge-status-${document.status}`}>{document.status}</span></div><p>{document.filename} · {document.destination} · {document.category} · {document.document_type}</p><small>{document.page_count} pages · {document.chunk_count} chunks</small></div><div className="knowledge-actions"><button className="text-button" disabled={busyId === document.id} onClick={() => reindex(document.id)}>{busyId === document.id ? 'Indexing…' : 'Re-index'}</button><button className="text-button danger" disabled={busyId === document.id} onClick={() => remove(document)}>Delete</button></div></article>)}</div>
     </div>
   </section>
 }

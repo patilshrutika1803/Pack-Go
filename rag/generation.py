@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from pydantic import BaseModel, Field
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -17,6 +19,18 @@ GENERATION_ERROR_ANSWER = (
     "I could not generate a grounded answer from the travel knowledge base right now."
 )
 PREVIEW_LENGTH = 180
+_GENERIC_TITLE_WORDS = {
+    "Answer",
+    "Context",
+    "Guide",
+    "Information",
+    "Page",
+    "Question",
+    "Source",
+    "Sources",
+    "Supported",
+    "The",
+}
 
 
 class GroundedSource(BaseModel):
@@ -84,6 +98,23 @@ def _deduplicate_documents(documents: list[RetrievedDocument]) -> list[Retrieved
     return unique_documents
 
 
+def _unsupported_named_entities(answer: str, context: str) -> list[str]:
+    """Find capitalized answer entities that are absent from retrieved text."""
+    normalized_context = " ".join(context.split()).casefold()
+    candidates = re.findall(
+        r"\b[A-Z][A-Za-z0-9]*(?:[-'][A-Za-z0-9]+)*(?:\s+[A-Z][A-Za-z0-9]*(?:[-'][A-Za-z0-9]+)*)*",
+        answer,
+    )
+    unsupported = []
+    for candidate in candidates:
+        normalized_candidate = " ".join(candidate.split())
+        if normalized_candidate in _GENERIC_TITLE_WORDS:
+            continue
+        if normalized_candidate.casefold() not in normalized_context:
+            unsupported.append(normalized_candidate)
+    return unsupported
+
+
 def build_grounded_context(documents: list[RetrievedDocument]) -> str:
     sections = []
     for index, document in enumerate(_deduplicate_documents(documents), start=1):
@@ -123,11 +154,12 @@ def generate_grounded_answer(
         raise ValueError("query must contain non-whitespace text")
 
     unique_documents = _deduplicate_documents(documents)
-    if not unique_documents:
-        return _no_context_response(query.strip(), retrieval_status or "no_results")
+    normalized_query = query.strip() if isinstance(query, str) else query
+    if not unique_documents or retrieval_status in {"weak", "no_results"}:
+        return _no_context_response(normalized_query, retrieval_status or "no_results")
 
-    normalized_query = query.strip()
     context = build_grounded_context(unique_documents)
+    source_content = "\n".join(document.content for document in unique_documents)
     user_content = (
         f"USER QUESTION:\n{normalized_query}\n\n"
         "RETRIEVED KNOWLEDGE CONTEXT:\n"
@@ -156,8 +188,12 @@ def generate_grounded_answer(
             for source in answer.sources
             if _source_key(source) in retrieved_sources
         ]
+        if answer.grounded and _unsupported_named_entities(answer.answer, source_content):
+            return _no_context_response(normalized_query, retrieval_status)
         if not answer.sources and answer.grounded:
             answer.grounded = False
+        if not answer.grounded:
+            answer.sources = []
         answer.query = normalized_query
         answer.retrieved_document_count = len(unique_documents)
         answer.retrieval_status = retrieval_status

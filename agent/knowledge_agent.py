@@ -15,6 +15,7 @@ KNOWLEDGE_TERMS = {
     "attraction",
     "beach",
     "beaches",
+    "capital",
     "destination",
     "guide",
     "reach",

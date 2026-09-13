@@ -11,7 +11,7 @@ class FakeEmbeddingModel:
 def _item(distance=0.25, chunk_index=0):
     return {
         "id": f"doc-1:1:{chunk_index}",
-        "content": f"Goa travel information {chunk_index}",
+            "content": f"Goa travel information {chunk_index}. North Goa beaches are described.",
         "metadata": {
             "document_id": "doc-1",
             "source": "guide.pdf",

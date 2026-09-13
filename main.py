@@ -96,6 +96,58 @@ class PlanRequest(BaseModel):
     remember_me: bool = True
 
 
+PROVIDER_FAILURE_MARKERS = (
+    "api key",
+    "authentication",
+    "authorization",
+    "credential",
+    "quota",
+    "rate limit",
+    "rate_limit",
+    "provider",
+    "429",
+    "401",
+    "403",
+    "unavailable",
+)
+
+
+def _workflow_failure_message(state: dict) -> str:
+    failure_reasons = state.get("failure_reasons", {})
+    reason_text = " ".join(str(reason).lower() for reason in failure_reasons.values())
+    if any(marker in reason_text for marker in PROVIDER_FAILURE_MARKERS):
+        return "The trip planner is temporarily unavailable because an AI service could not respond. Check provider credentials or quota and try again."
+    return "Workflow failed validation."
+
+
+def _public_failure_reasons(state: dict) -> dict[str, str]:
+    return {
+        agent: "The agent could not complete its step."
+        for agent in state.get("failure_reasons", {})
+    }
+
+
+def _knowledge_sources(answer: object) -> list[dict]:
+    if not answer:
+        return []
+    sources = answer.get("sources", []) if isinstance(answer, dict) else getattr(answer, "sources", [])
+    return [source.model_dump() if hasattr(source, "model_dump") else source for source in sources]
+
+
+def _knowledge_metadata(answer: object) -> dict[str, object]:
+    if isinstance(answer, dict):
+        return {
+            "grounded": bool(answer.get("grounded", False)),
+            "retrieved_document_count": int(answer.get("retrieved_document_count", 0)),
+            "retrieval_status": answer.get("retrieval_status", "unknown"),
+        }
+    return {
+        "grounded": bool(getattr(answer, "grounded", False)) if answer else False,
+        "retrieved_document_count": int(getattr(answer, "retrieved_document_count", 0)) if answer else 0,
+        "retrieval_status": getattr(answer, "retrieval_status", "unknown") if answer else "unknown",
+    }
+
+
 def _saved_preferences_context(user: User | None, db: Session) -> dict:
     if not user:
         return {}
@@ -145,7 +197,8 @@ async def plan_trip_sync(request: PlanRequest, user: User | None = Depends(get_o
                 "intent": "general_chat",
                 "response": output.get("chat_response", ""),
                 "chat_response": output.get("chat_response", ""),
-                "sources": [source.model_dump() for source in output.get("knowledge_answer").sources] if output.get("knowledge_answer") else [],
+                "sources": _knowledge_sources(output.get("knowledge_answer")),
+                **_knowledge_metadata(output.get("knowledge_answer")),
             }
 
         validation_errors = validate_final_state(output)
@@ -153,10 +206,10 @@ async def plan_trip_sync(request: PlanRequest, user: User | None = Depends(get_o
             return JSONResponse(
                 status_code=422,
                 content={
-                    "error": "Workflow failed validation.",
+                    "error": _workflow_failure_message(output),
                     "details": validation_errors,
                     "failed_agents": output.get("failed_agents", []),
-                    "failure_reasons": output.get("failure_reasons", {}),
+                    "failure_reasons": _public_failure_reasons(output),
                 },
             )
         
@@ -245,7 +298,7 @@ async def plan_trip_stream(request: PlanRequest, user: User | None = Depends(get
                         yield format_sse_event(
                             "error",
                             "System",
-                            "Workflow failed validation.",
+                            _workflow_failure_message(final_state),
                             data={"details": chat_errors},
                         )
                         return
@@ -257,7 +310,8 @@ async def plan_trip_stream(request: PlanRequest, user: User | None = Depends(get
                             "intent": "general_chat",
                             "response": final_state.get("chat_response", ""),
                             "chat_response": final_state.get("chat_response", ""),
-                            "sources": [source.model_dump() for source in final_state.get("knowledge_answer").sources] if final_state.get("knowledge_answer") else [],
+                            "sources": _knowledge_sources(final_state.get("knowledge_answer")),
+                            **_knowledge_metadata(final_state.get("knowledge_answer")),
                         },
                     )
                     return
@@ -267,11 +321,11 @@ async def plan_trip_stream(request: PlanRequest, user: User | None = Depends(get
                     yield format_sse_event(
                         "error",
                         "System",
-                        "Workflow failed validation.",
+                        _workflow_failure_message(final_state),
                         data={
                             "details": validation_errors,
                             "failed_agents": final_state.get("failed_agents", []),
-                            "failure_reasons": final_state.get("failure_reasons", {}),
+                            "failure_reasons": _public_failure_reasons(final_state),
                         },
                     )
                 else:

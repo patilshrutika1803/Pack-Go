@@ -1,5 +1,6 @@
 import importlib
 
+import bcrypt
 import pytest
 from fastapi.testclient import TestClient
 
@@ -40,6 +41,29 @@ def test_registration_login_current_user_and_duplicate_email(auth_client):
     invalid_login = auth_client.post("/api/v1/auth/login", json={"email": "traveler@example.com", "password": "wrongpass"})
     assert invalid_login.status_code == 401
     assert invalid_login.json()["error"] == "The email or password is incorrect."
+
+
+def test_admin_role_persists_is_hashed_and_authorizes_after_login(auth_client):
+    from database import User
+    from database.connection import SessionLocal
+
+    registered = register(auth_client, "admin@example.com")
+    with SessionLocal() as db:
+        user = db.get(User, registered["user"]["id"])
+        user.is_admin = True
+        password_hash = user.password_hash
+        db.commit()
+
+    assert password_hash != "password123"
+    assert bcrypt.checkpw(b"password123", password_hash.encode())
+
+    login = auth_client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@example.com", "password": "password123"},
+    )
+    assert login.status_code == 200
+    assert login.json()["user"]["is_admin"] is True
+    assert auth_client.get("/api/v1/admin/knowledge/documents", headers=auth_header(login.json())).status_code == 200
 
 
 def test_auth_validation_and_unexpected_failures_are_not_planner_errors(auth_client):

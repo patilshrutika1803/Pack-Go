@@ -13,6 +13,7 @@ export default function AuthPage({ mode }) {
   const [error, setError] = useState('')
   const [verificationToken, setVerificationToken] = useState('')
   const [verificationMessage, setVerificationMessage] = useState('')
+  const [loginMode, setLoginMode] = useState('user')
   const next = new URLSearchParams(location.search).get('next') || '/trips'
   const update = (event) => setForm({ ...form, [event.target.name]: event.target.value })
   const switchPath = (path) => `${path}${location.search}`
@@ -31,8 +32,10 @@ export default function AuthPage({ mode }) {
       if (isRegister && result.verification_token) {
         setVerificationToken(result.verification_token)
         setVerificationMessage('Account created. Verify your email before continuing.')
+      } else if (loginMode === 'admin' && !result.user?.is_admin) {
+        setError('This account does not have administrator access.')
       } else {
-        navigate(next, { replace: true })
+        navigate(loginMode === 'admin' ? '/admin/knowledge' : next, { replace: true })
       }
     } catch (err) {
       setError(safeError(err.message))
@@ -64,9 +67,13 @@ export default function AuthPage({ mode }) {
             <h2>{isRegister ? 'Create your account.' : 'Good to see you.'}</h2>
             <p>{isRegister ? "Let's get you ready for your next journey." : 'Your next adventure starts here.'}</p>
           </div>
-          <div className="auth-tabs" role="tablist" aria-label="Authentication mode">
+          {!isRegister && <div className="auth-mode-selector" role="group" aria-label="Sign-in access mode">
+            <button type="button" className={loginMode === 'user' ? 'is-active' : ''} onClick={() => { setLoginMode('user'); setError('') }}>User</button>
+            <button type="button" className={loginMode === 'admin' ? 'is-active' : ''} onClick={() => { setLoginMode('admin'); setError('') }}>Admin</button>
+          </div>}
+          <div className={`auth-tabs${!isRegister && loginMode === 'admin' ? ' auth-tabs-single' : ''}`} role="tablist" aria-label="Authentication mode">
             <Link className={!isRegister ? 'is-active' : ''} to={switchPath('/login')} role="tab" aria-selected={!isRegister}>Log in</Link>
-            <Link className={isRegister ? 'is-active' : ''} to={switchPath('/register')} role="tab" aria-selected={isRegister}>Sign up</Link>
+            {(isRegister || loginMode === 'user') && <Link className={isRegister ? 'is-active' : ''} to={switchPath('/register')} role="tab" aria-selected={isRegister}>Sign up</Link>}
           </div>
           <form className="auth-form" onSubmit={submit}>
             {isRegister && <label>Full name<input name="name" value={form.name} onChange={update} autoComplete="name" required placeholder="Your name" /></label>}

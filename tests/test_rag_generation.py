@@ -22,6 +22,24 @@ def _document(page=1, chunk_index=0):
     )
 
 
+def _udaipur_document():
+    return RetrievedDocument(
+        content=(
+            "The City Palace Museum in Udaipur is a historic palace complex. "
+            "The visitor guide describes its museum galleries."
+        ),
+        document_id="udaipur-doc",
+        source="udaipur-guide.pdf",
+        filename="City Palace Museum Udaipur Visitor Guide.pdf",
+        page=1,
+        chunk_index=0,
+        destination="Udaipur",
+        category="travel_guide",
+        document_type="destination_guide",
+        distance=0.2,
+    )
+
+
 def test_no_context_returns_controlled_answer_without_provider_call(monkeypatch):
     monkeypatch.setattr(
         "rag.generation.invoke_with_fallback",
@@ -74,6 +92,98 @@ def test_grounded_response_preserves_retrieved_sources(monkeypatch):
     system_prompt = captured["system"].lower()
     assert "do not invent facts" in system_prompt
     assert "do not fabricate" in system_prompt
+
+
+def test_direct_udaipur_answer_is_grounded_with_retrieved_citation(monkeypatch):
+    monkeypatch.setattr(
+        "rag.generation.invoke_with_fallback",
+        lambda *_args: {
+            "answer": "The City Palace Museum in Udaipur is a historic palace complex.",
+            "sources": [{
+                "document_id": "udaipur-doc",
+                "filename": "City Palace Museum Udaipur Visitor Guide.pdf",
+                "source": "udaipur-guide.pdf",
+                "page": 1,
+                "chunk_index": 0,
+                "destination": "Udaipur",
+                "category": "travel_guide",
+                "document_type": "destination_guide",
+            }],
+            "grounded": True,
+            "query": "tell me about city palace museum",
+            "retrieved_document_count": 1,
+        },
+    )
+
+    response = generate_grounded_answer(
+        "tell me about city palace museum", [_udaipur_document()]
+    )
+
+    assert response.grounded is True
+    assert response.sources[0].filename == "City Palace Museum Udaipur Visitor Guide.pdf"
+
+
+def test_udaipur_broad_attraction_list_is_rejected_as_insufficient(monkeypatch):
+    monkeypatch.setattr(
+        "rag.generation.invoke_with_fallback",
+        lambda *_args: {
+            "answer": (
+                "Udaipur attractions include City Palace, Lake Pichola, Jag Mandir, "
+                "Saheliyon-Ki-Bari, Fateh Sagar Lake, and Monsoon Palace."
+            ),
+            "sources": [{
+                "document_id": "udaipur-doc",
+                "filename": "City Palace Museum Udaipur Visitor Guide.pdf",
+                "source": "udaipur-guide.pdf",
+                "page": 1,
+                "chunk_index": 0,
+                "destination": "Udaipur",
+                "category": "travel_guide",
+                "document_type": "destination_guide",
+            }],
+            "grounded": True,
+            "query": "places to visit in udaipur",
+            "retrieved_document_count": 1,
+        },
+    )
+
+    response = generate_grounded_answer(
+        "places to visit in udaipur", [_udaipur_document()]
+    )
+
+    assert response.answer == NO_CONTEXT_ANSWER
+    assert response.grounded is False
+    assert response.sources == []
+
+
+def test_unrelated_mongolia_answer_is_rejected_without_citations(monkeypatch):
+    monkeypatch.setattr(
+        "rag.generation.invoke_with_fallback",
+        lambda *_args: {
+            "answer": "The capital of Mongolia is Ulaanbaatar.",
+            "sources": [{
+                "document_id": "udaipur-doc",
+                "filename": "City Palace Museum Udaipur Visitor Guide.pdf",
+                "source": "udaipur-guide.pdf",
+                "page": 1,
+                "chunk_index": 0,
+                "destination": "Udaipur",
+                "category": "travel_guide",
+                "document_type": "destination_guide",
+            }],
+            "grounded": True,
+            "query": "What is the capital of Mongolia?",
+            "retrieved_document_count": 1,
+        },
+    )
+
+    response = generate_grounded_answer(
+        "What is the capital of Mongolia?", [_udaipur_document()]
+    )
+
+    assert response.answer == NO_CONTEXT_ANSWER
+    assert response.grounded is False
+    assert response.sources == []
 
 
 def test_multiple_sources_are_separated_and_duplicates_are_removed(monkeypatch):
