@@ -13,6 +13,7 @@ import ProtectedRoute from './routes/ProtectedRoute'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import PreferencesPage from './pages/PreferencesPage'
 import KnowledgeCenterPage from './pages/KnowledgeCenterPage'
+import TravelGuidePage from './pages/TravelGuidePage'
 import AdminRoute from './routes/AdminRoute'
 import './App.css'
 
@@ -36,6 +37,7 @@ export default function App() {
               <Route path="/trips/:tripId" element={<TripDetailPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/preferences" element={<PreferencesPage />} />
+              <Route path="/travel-guide" element={<TravelGuidePage />} />
             </Route>
             <Route element={<AdminRoute />}><Route path="/admin/knowledge" element={<KnowledgeCenterPage />} /></Route>
             <Route path="*" element={<Navigate to="/" replace />} />

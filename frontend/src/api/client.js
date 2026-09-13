@@ -72,6 +72,11 @@ export const knowledgeApi = {
     const params = new URLSearchParams(Object.entries(filters).filter(([, value]) => value))
     return request(`/admin/knowledge/documents${params.toString() ? `?${params}` : ''}`)
   },
+  userList: (filters = {}) => {
+    const params = new URLSearchParams(Object.entries(filters).filter(([, value]) => value))
+    return request(`/knowledge${params.toString() ? `?${params}` : ''}`)
+  },
+  ask: (payload) => request('/knowledge/ask', { method: 'POST', body: JSON.stringify(payload) }),
   upload: (formData) => request('/admin/knowledge/documents', { method: 'POST', body: formData }),
   reindex: (id) => request(`/admin/knowledge/documents/${id}/reindex`, { method: 'POST' }),
   remove: (id) => request(`/admin/knowledge/documents/${id}`, { method: 'DELETE' }),

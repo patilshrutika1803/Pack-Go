@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import inspect, text
 
 from database import KnowledgeSource, User
+from rag.generation import GroundedAnswer, GroundedSource
 from tests.test_authentication import auth_header, register
 
 
@@ -37,6 +38,150 @@ def _make_admin(payload):
         user = db.get(User, payload["user"]["id"])
         user.is_admin = True
         db.commit()
+
+
+def _seed_sources():
+    from database.connection import SessionLocal
+
+    with SessionLocal() as db:
+        db.add_all(
+            [
+                KnowledgeSource(
+                    id="source-goa",
+                    document_id="document-goa",
+                    filename="goa-guide.pdf",
+                    display_name="Goa Beach Guide",
+                    destination="Goa",
+                    category="travel_guide",
+                    document_type="destination_guide",
+                    file_path="/private/goa-guide.pdf",
+                    chunk_count=4,
+                    page_count=2,
+                    status="indexed",
+                ),
+                KnowledgeSource(
+                    id="source-kyoto",
+                    document_id="document-kyoto",
+                    filename="kyoto-food.pdf",
+                    display_name="Kyoto Food Guide",
+                    destination="Kyoto",
+                    category="food",
+                    document_type="restaurant_guide",
+                    file_path="/private/kyoto-food.pdf",
+                    chunk_count=3,
+                    page_count=1,
+                    status="indexed",
+                ),
+            ]
+        )
+        db.commit()
+
+
+def test_authenticated_user_can_list_knowledge_documents(auth_client):
+    user = register(auth_client, "knowledge-reader@example.com")
+    _seed_sources()
+
+    response = auth_client.get("/api/v1/knowledge", headers=auth_header(user))
+
+    assert response.status_code == 200
+    assert {item["display_name"] for item in response.json()} == {"Goa Beach Guide", "Kyoto Food Guide"}
+
+
+def test_knowledge_listing_requires_authentication(auth_client):
+    assert auth_client.get("/api/v1/knowledge").status_code == 401
+
+
+def test_user_knowledge_ask_requires_authentication(auth_client):
+    assert auth_client.post("/api/v1/knowledge/ask", json={"question": "Tell me about Goa"}).status_code == 401
+
+
+def test_user_knowledge_ask_reuses_grounded_answer_contract(auth_client, monkeypatch):
+    user = register(auth_client, "knowledge-ask@example.com")
+    answer = GroundedAnswer(
+        answer="The guide describes North Goa beaches.",
+        sources=[GroundedSource(
+            document_id="document-goa", filename="goa-guide.pdf", source="goa-guide.pdf",
+            page=2, chunk_index=1, destination="Goa", category="travel_guide",
+            document_type="destination_guide",
+        )],
+        grounded=True,
+        query="What should I see in Goa?",
+        retrieved_document_count=1,
+    )
+    captured = {}
+
+    def fake_knowledge_agent(state):
+        captured["state"] = state
+        return {"knowledge_answer": answer}
+
+    monkeypatch.setattr("api.v1.knowledge.knowledge_agent_node", fake_knowledge_agent)
+    response = auth_client.post(
+        "/api/v1/knowledge/ask",
+        headers=auth_header(user),
+        json={"question": "What should I see in Goa?", "destination": "Goa", "category": "travel_guide"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["grounded"] is True
+    assert response.json()["sources"][0]["page"] == 2
+    assert "file_path" not in response.json()
+    assert captured["state"]["knowledge_destination"] == "Goa"
+    assert captured["state"]["knowledge_category"] == "travel_guide"
+
+
+@pytest.mark.parametrize(
+    ("parameter", "value", "expected"),
+    [
+        ("destination", "Goa", "Goa Beach Guide"),
+        ("category", "food", "Kyoto Food Guide"),
+        ("document_type", "destination_guide", "Goa Beach Guide"),
+        ("search", "beach", "Goa Beach Guide"),
+    ],
+)
+def test_knowledge_listing_filters(auth_client, parameter, value, expected):
+    user = register(auth_client, f"knowledge-{parameter}@example.com")
+    _seed_sources()
+
+    response = auth_client.get(
+        "/api/v1/knowledge",
+        params={parameter: value},
+        headers=auth_header(user),
+    )
+
+    assert response.status_code == 200
+    assert [item["display_name"] for item in response.json()] == [expected]
+
+
+def test_knowledge_listing_returns_safe_metadata_contract(auth_client):
+    user = register(auth_client, "knowledge-contract@example.com")
+    _seed_sources()
+
+    item = auth_client.get("/api/v1/knowledge", headers=auth_header(user)).json()[0]
+
+    assert set(item) == {
+        "id",
+        "document_id",
+        "filename",
+        "display_name",
+        "destination",
+        "category",
+        "document_type",
+        "chunk_count",
+        "page_count",
+        "status",
+        "created_at",
+        "updated_at",
+    }
+    assert "file_path" not in item
+
+
+def test_regular_user_cannot_use_admin_knowledge_mutations(auth_client):
+    user = register(auth_client, "knowledge-non-admin@example.com")
+    headers = auth_header(user)
+
+    assert auth_client.post("/api/v1/admin/knowledge/documents", headers=headers).status_code == 403
+    assert auth_client.post("/api/v1/admin/knowledge/documents/source-1/reindex", headers=headers).status_code == 403
+    assert auth_client.delete("/api/v1/admin/knowledge/documents/source-1", headers=headers).status_code == 403
 
 
 def test_knowledge_endpoints_require_authentication_and_admin(auth_client):

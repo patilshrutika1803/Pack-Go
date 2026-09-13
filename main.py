@@ -15,7 +15,7 @@ from agent.agentic_workflow import GraphBuilder, build_final_plan, validate_fina
 from api.v1.trips import router as api_v1_router
 from api.v1.auth import router as auth_router
 from api.v1.users import router as users_router
-from api.v1.knowledge import router as knowledge_router
+from api.v1.knowledge import router as knowledge_router, user_router as user_knowledge_router
 from api.v1.dependencies import get_optional_current_user
 from database import User, UserPreference
 from database.connection import get_db
@@ -45,6 +45,7 @@ app.include_router(api_v1_router)
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(knowledge_router)
+app.include_router(user_knowledge_router)
 
 app.add_middleware(
     CORSMiddleware,
