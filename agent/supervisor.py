@@ -6,6 +6,7 @@ from logger.logging import get_logger
 from models.schemas import SupervisorDecision
 from prompt_library.supervisor_prompt import SYSTEM_PROMPT
 from utils.llm_loader import build_structured_output, invoke_with_fallback
+from agent.knowledge_agent import is_knowledge_query
 
 logger = get_logger(__name__)
 
@@ -41,4 +42,9 @@ def supervisor_node(state: Dict[str, Any]) -> Dict[str, Any]:
         intent = "plan_trip"
 
     logger.info("Supervisor: intent = '%s'", intent)
-    return {"query": query, "intent": intent, "completed_agents": ["Supervisor"]}
+    return {
+        "query": query,
+        "intent": intent,
+        "knowledge_requested": is_knowledge_query(query),
+        "completed_agents": ["Supervisor"],
+    }

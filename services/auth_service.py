@@ -47,7 +47,7 @@ class AuthService:
 
     @staticmethod
     def _public_user(user: User) -> dict[str, object]:
-        return {"id": user.id, "name": user.name, "email": user.email, "is_active": user.is_active, "is_verified": user.is_verified}
+        return {"id": user.id, "name": user.name, "email": user.email, "is_active": user.is_active, "is_verified": user.is_verified, "is_admin": user.is_admin}
 
     @staticmethod
     def _token_hash(token: str) -> str:

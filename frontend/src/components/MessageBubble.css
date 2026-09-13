@@ -39,3 +39,10 @@
   border: 1px solid var(--border-light);
   border-bottom-left-radius: 4px;
 }
+
+.source-list { display: grid; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-light); }
+.source-list > small { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.source-card { padding: 8px 10px; border: 1px solid var(--border-light); border-radius: 6px; background: rgba(255,255,255,.55); font-size: 11px; }
+.source-card summary { cursor: pointer; color: var(--ink); font-weight: 700; }
+.source-card span { display: block; margin-top: 6px; color: var(--muted); }
+.source-card p { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.4; }

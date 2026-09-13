@@ -106,6 +106,7 @@ class UserResponse(BaseModel):
     email: str
     is_active: bool
     is_verified: bool
+    is_admin: bool = False
 
 
 class AuthResponse(BaseModel):

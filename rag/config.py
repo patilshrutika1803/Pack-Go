@@ -9,6 +9,8 @@ class RagSettings:
     chunk_overlap: int = 60
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     chroma_path: str = "./chroma_db"
+    relevance_distance_threshold: float = 0.75
+    max_retrieval_attempts: int = 2
 
 
 def get_rag_settings() -> RagSettings:
@@ -18,4 +20,6 @@ def get_rag_settings() -> RagSettings:
         chunk_overlap=int(os.getenv("RAG_CHUNK_OVERLAP", "60")),
         embedding_model=os.getenv("RAG_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"),
         chroma_path=os.getenv("CHROMA_PERSIST_DIRECTORY", "./chroma_db"),
+        relevance_distance_threshold=float(os.getenv("RAG_RELEVANCE_DISTANCE_THRESHOLD", "0.75")),
+        max_retrieval_attempts=min(int(os.getenv("RAG_MAX_RETRIEVAL_ATTEMPTS", "2")), 2),
     )

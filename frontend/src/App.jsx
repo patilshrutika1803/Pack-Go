@@ -12,6 +12,8 @@ import TripDetailPage from './pages/TripDetailPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import PreferencesPage from './pages/PreferencesPage'
+import KnowledgeCenterPage from './pages/KnowledgeCenterPage'
+import AdminRoute from './routes/AdminRoute'
 import './App.css'
 
 export default function App() {
@@ -35,6 +37,7 @@ export default function App() {
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/preferences" element={<PreferencesPage />} />
             </Route>
+            <Route element={<AdminRoute />}><Route path="/admin/knowledge" element={<KnowledgeCenterPage />} /></Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

@@ -18,9 +18,10 @@ function authErrorMessage(path, detail) {
 async function request(path, options = {}) {
   const token = localStorage.getItem('pack-go-token')
   const authorization = token && !options.headers?.Authorization ? { Authorization: `Bearer ${token}` } : {}
+  const isFormData = options.body instanceof FormData
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...authorization, ...(options.headers || {}) },
+    headers: { ...(isFormData ? {} : { 'Content-Type': 'application/json' }), ...authorization, ...(options.headers || {}) },
   })
   const body = await response.json().catch(() => ({}))
   if (!response.ok) {
@@ -64,4 +65,14 @@ export const preferencesApi = {
     method: 'PATCH',
     body: JSON.stringify(Object.fromEntries(PREFERENCE_FIELDS.filter((field) => field in payload).map((field) => [field, payload[field]]))),
   }),
+}
+
+export const knowledgeApi = {
+  list: (filters = {}) => {
+    const params = new URLSearchParams(Object.entries(filters).filter(([, value]) => value))
+    return request(`/admin/knowledge/documents${params.toString() ? `?${params}` : ''}`)
+  },
+  upload: (formData) => request('/admin/knowledge/documents', { method: 'POST', body: formData }),
+  reindex: (id) => request(`/admin/knowledge/documents/${id}/reindex`, { method: 'POST' }),
+  remove: (id) => request(`/admin/knowledge/documents/${id}`, { method: 'DELETE' }),
 }

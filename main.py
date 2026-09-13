@@ -15,6 +15,7 @@ from agent.agentic_workflow import GraphBuilder, build_final_plan, validate_fina
 from api.v1.trips import router as api_v1_router
 from api.v1.auth import router as auth_router
 from api.v1.users import router as users_router
+from api.v1.knowledge import router as knowledge_router
 from api.v1.dependencies import get_optional_current_user
 from database import User, UserPreference
 from database.connection import get_db
@@ -43,6 +44,7 @@ app = FastAPI(title="PACK & GO API")
 app.include_router(api_v1_router)
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(knowledge_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -143,6 +145,7 @@ async def plan_trip_sync(request: PlanRequest, user: User | None = Depends(get_o
                 "intent": "general_chat",
                 "response": output.get("chat_response", ""),
                 "chat_response": output.get("chat_response", ""),
+                "sources": [source.model_dump() for source in output.get("knowledge_answer").sources] if output.get("knowledge_answer") else [],
             }
 
         validation_errors = validate_final_state(output)
@@ -254,6 +257,7 @@ async def plan_trip_stream(request: PlanRequest, user: User | None = Depends(get
                             "intent": "general_chat",
                             "response": final_state.get("chat_response", ""),
                             "chat_response": final_state.get("chat_response", ""),
+                            "sources": [source.model_dump() for source in final_state.get("knowledge_answer").sources] if final_state.get("knowledge_answer") else [],
                         },
                     )
                     return

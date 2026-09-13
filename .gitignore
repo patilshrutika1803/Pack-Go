@@ -85,4 +85,4 @@ chroma_db/
 # memory/
 # Reference implementations
 reference/
-test-data/
+test-data/knowledge_storage/
