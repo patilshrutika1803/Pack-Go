@@ -85,5 +85,6 @@ chroma_db/
 # memory/
 # Reference implementations
 reference/
-test-data/knowledge_storage/
+# Local RAG runtime storage
+knowledge_storage/
 test-data/
