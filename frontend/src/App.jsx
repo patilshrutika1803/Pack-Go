@@ -15,6 +15,7 @@ import PreferencesPage from './pages/PreferencesPage'
 import KnowledgeCenterPage from './pages/KnowledgeCenterPage'
 import TravelGuidePage from './pages/TravelGuidePage'
 import AdminRoute from './routes/AdminRoute'
+import InvitationAcceptPage from './pages/InvitationAcceptPage'
 import './App.css'
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/login" element={<AuthPage mode="login" />} />
             <Route path="/register" element={<AuthPage mode="register" />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/invitations/:token" element={<InvitationAcceptPage />} />
             <Route element={<ProtectedRoute />}>
               <Route path="/trips" element={<TripsPage />} />
               <Route path="/trips/:tripId" element={<TripDetailPage />} />

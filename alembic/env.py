@@ -6,7 +6,8 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 
 from database import Base
-from database.models import KnowledgeSource, Trip, User, UserPreference  # noqa: F401  # ensures models are registered
+from database.models import (ChecklistItem, Decision, GroupMessage, KnowledgeSource, Notification, Proposal,
+                             ProposalVote, Trip, TripInvitation, TripMember, User, UserPreference)  # noqa: F401
 
 load_dotenv()
 

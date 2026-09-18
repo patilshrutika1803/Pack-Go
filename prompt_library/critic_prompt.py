@@ -9,4 +9,7 @@ Rules:
 - requires_revision=true if overall_score < 7.0 or any score < 5.0.
 - revision_instructions must be specific and actionable (not vague).
 - overall_score = exact average of the 4 scores.
+- Revision instructions must never ask the itinerary agent to omit or remove any
+	DayPlan field. Every day must retain day_number, theme, hotel, meals, attractions,
+	activities, transport, and estimated_day_cost.
 """

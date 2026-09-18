@@ -2,6 +2,7 @@ from rag.generation import (
     GENERATION_ERROR_ANSWER,
     NO_CONTEXT_ANSWER,
     GroundedAnswer,
+    _unsupported_named_entities,
     generate_grounded_answer,
 )
 from rag.retrieval import RetrievedDocument
@@ -56,6 +57,15 @@ def test_no_context_returns_controlled_answer_without_provider_call(monkeypatch)
         retrieved_document_count=0,
         retrieval_status="strong",
     )
+
+
+def test_grounding_validator_accepts_title_from_retrieved_filename():
+    context = "filename: Goa-Travel-Guide.pdf\ncontent: Goa is a preferred holiday destination."
+
+    assert _unsupported_named_entities(
+        "The Goa Travel Guide describes Goa as a preferred holiday destination.",
+        context,
+    ) == []
 
 
 def test_grounded_response_preserves_retrieved_sources(monkeypatch):

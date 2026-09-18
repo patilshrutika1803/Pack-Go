@@ -5,7 +5,7 @@ reducing token usage significantly vs. passing full JSON blobs.
 """
 from typing import Dict, Any, List
 from langchain_core.messages import SystemMessage, HumanMessage
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from utils.llm_loader import build_structured_output, invoke_with_fallback
 from utils.context_summarizer import summarize_for_itinerary
 from utils.plan_costs import reconcile_budget
@@ -18,6 +18,39 @@ logger = get_logger(__name__)
 class ItineraryOutput(BaseModel):
     """Structured output containing a list of daily plans."""
     itinerary: List[DayPlan] = Field(description="The final day-by-day itinerary.")
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_missing_day_fields(cls, value):
+        """Keep incomplete provider objects inside the strict DayPlan contract."""
+        if not isinstance(value, dict) or not isinstance(value.get("itinerary"), list):
+            return value
+
+        normalized = []
+        for index, raw_day in enumerate(value["itinerary"], start=1):
+            if not isinstance(raw_day, dict):
+                normalized.append(raw_day)
+                continue
+            day = dict(raw_day)
+            day.setdefault("day_number", index)
+            day.setdefault("theme", "Unspecified")
+            day.setdefault(
+                "hotel",
+                {
+                    "name": "Not specified",
+                    "stars": "Unknown",
+                    "price_per_night": "₹0",
+                    "amenities": [],
+                    "description": "No accommodation details were provided.",
+                },
+            )
+            day.setdefault("meals", [])
+            day.setdefault("attractions", [])
+            day.setdefault("activities", [])
+            day.setdefault("transport", {"mode": "Not specified", "estimated_cost": "Free"})
+            day.setdefault("estimated_day_cost", 0)
+            normalized.append(day)
+        return {**value, "itinerary": normalized}
 
 def itinerary_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """

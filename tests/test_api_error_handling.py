@@ -95,6 +95,9 @@ def test_sse_plan_completion_serializes_travelplan(monkeypatch):
         id = "trip-sse-1"
 
     class FakeTripService:
+        def __init__(self, db):
+            self.db = db
+
         def travelplan_to_trip(self, travel_plan, user_id=None):
             assert travel_plan is valid_plan
             return travel_plan
@@ -253,7 +256,9 @@ def test_plan_persists_valid_travelplan_to_database(monkeypatch, tmp_path):
 
     from services.trip_service import TripService
 
-    trips = TripService().list_trips()
+    from database.connection import SessionLocal
+    with SessionLocal() as db:
+        trips = TripService(db).list_trips()
     assert len(trips) == 1
     assert trips[0].destination == "Kyoto, Japan"
     assert trips[0].title == "Kyoto, Japan"
@@ -297,7 +302,9 @@ def test_authenticated_plan_persistence_assigns_current_user(monkeypatch, tmp_pa
 
     assert response.status_code == 200
     from services.trip_service import TripService
-    trips = TripService().list_trips(user_id=registration.json()["user"]["id"])
+    from database.connection import SessionLocal
+    with SessionLocal() as db:
+        trips = TripService(db).list_trips(user_id=registration.json()["user"]["id"])
     assert len(trips) == 1
     assert trips[0].user_id == registration.json()["user"]["id"]
 
@@ -352,7 +359,9 @@ def test_plan_does_not_persist_invalid_workflow_output(monkeypatch, tmp_path):
     response = client.post("/plan", json={"question": "Plan a trip"})
 
     assert response.status_code == 422
-    assert len(TripService().list_trips()) == 0
+    from database.connection import SessionLocal
+    with SessionLocal() as db:
+        assert len(TripService(db).list_trips()) == 0
 
 
 def test_plan_db_failure_does_not_expose_raw_database_error(monkeypatch, tmp_path):
@@ -455,4 +464,6 @@ def test_plan_db_failure_does_not_expose_raw_database_error(monkeypatch, tmp_pat
     assert response.status_code == 500
     assert response.json()["error"] == main_module.GENERIC_ERROR_MESSAGE
     assert "database exploded" not in response.text.lower()
-    assert len(TripService().list_trips()) == 0
+    from database.connection import SessionLocal
+    with SessionLocal() as db:
+        assert len(TripService(db).list_trips()) == 0

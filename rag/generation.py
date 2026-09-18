@@ -100,17 +100,22 @@ def _deduplicate_documents(documents: list[RetrievedDocument]) -> list[Retrieved
 
 def _unsupported_named_entities(answer: str, context: str) -> list[str]:
     """Find capitalized answer entities that are absent from retrieved text."""
-    normalized_context = " ".join(context.split()).casefold()
+    normalized_context = " ".join(re.findall(r"[a-z0-9]+", context.casefold()))
     candidates = re.findall(
         r"\b[A-Z][A-Za-z0-9]*(?:[-'][A-Za-z0-9]+)*(?:\s+[A-Z][A-Za-z0-9]*(?:[-'][A-Za-z0-9]+)*)*",
         answer,
     )
     unsupported = []
     for candidate in candidates:
-        normalized_candidate = " ".join(candidate.split())
-        if normalized_candidate in _GENERIC_TITLE_WORDS:
+        candidate_words = [
+            word.casefold()
+            for word in re.findall(r"[A-Za-z0-9]+", candidate)
+            if word.casefold() not in {generic.casefold() for generic in _GENERIC_TITLE_WORDS}
+        ]
+        normalized_candidate = " ".join(candidate_words)
+        if not normalized_candidate:
             continue
-        if normalized_candidate.casefold() not in normalized_context:
+        if normalized_candidate not in normalized_context:
             unsupported.append(normalized_candidate)
     return unsupported
 
@@ -159,6 +164,13 @@ def generate_grounded_answer(
         return _no_context_response(normalized_query, retrieval_status or "no_results")
 
     context = build_grounded_context(unique_documents)
+    logger.info(
+        "RAG generation query=%r retrieved_count=%d retrieval_status=%s context=%s",
+        normalized_query,
+        len(unique_documents),
+        retrieval_status,
+        context,
+    )
     source_content = "\n".join(document.content for document in unique_documents)
     user_content = (
         f"USER QUESTION:\n{normalized_query}\n\n"
@@ -197,6 +209,12 @@ def generate_grounded_answer(
         answer.query = normalized_query
         answer.retrieved_document_count = len(unique_documents)
         answer.retrieval_status = retrieval_status
+        logger.info(
+            "RAG generation answer grounded=%s citations=%s answer=%r",
+            answer.grounded,
+            [source.model_dump() for source in answer.sources],
+            answer.answer,
+        )
         return answer
     except Exception:
         logger.exception("Grounded RAG answer generation failed")

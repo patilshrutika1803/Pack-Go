@@ -14,7 +14,8 @@ export default function AuthPage({ mode }) {
   const [verificationToken, setVerificationToken] = useState('')
   const [verificationMessage, setVerificationMessage] = useState('')
   const [loginMode, setLoginMode] = useState('user')
-  const next = new URLSearchParams(location.search).get('next') || '/trips'
+  const requestedNext = new URLSearchParams(location.search).get('next')
+  const next = requestedNext?.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/trips'
   const update = (event) => setForm({ ...form, [event.target.name]: event.target.value })
   const switchPath = (path) => `${path}${location.search}`
   const safeError = (message) => {
@@ -83,7 +84,7 @@ export default function AuthPage({ mode }) {
             {error && <p className="form-error" role="alert">{error}</p>}
             <button className="button button-primary submit-button" disabled={isLoading}>{isLoading ? 'Loading...' : isRegister ? 'Create account →' : 'Log in →'}</button>
           </form>
-          {isRegister && verificationToken && <div className="auth-form-meta"><span>{verificationMessage}</span><button type="button" className="text-button" onClick={async () => { try { await authApi.verifyEmail(verificationToken); setVerificationMessage('Email verified successfully.') } catch (err) { setError(err.message || 'Unable to verify your email right now. Please try again.') } }}>Verify email</button></div>}
+          {isRegister && verificationToken && <div className="auth-form-meta"><span>{verificationMessage}</span><button type="button" className="text-button" onClick={async () => { try { await authApi.verifyEmail(verificationToken); setVerificationMessage('Email verified successfully.'); navigate(next, { replace: true }) } catch (err) { setError(err.message || 'Unable to verify your email right now. Please try again.') } }}>Verify email</button></div>}
           {!isRegister && <>
             <div className="auth-form-meta"><span>Secure access to your trips</span><Link className="auth-link-muted" to="/forgot-password">Forgot password?</Link></div>
             <div className="auth-divider"><span>OR</span></div>

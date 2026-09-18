@@ -8,11 +8,13 @@ from pydantic import BaseModel, Field
 from rag.config import get_rag_settings
 from rag.embeddings import EmbeddingProvider, embed_texts
 from rag.vector_store import get_knowledge_collection
+from logger.logging import get_logger
 
 
 DEFAULT_TOP_K = 5
 MAX_TOP_K = 50
 FILTER_FIELDS = ("destination", "category", "document_type")
+logger = get_logger(__name__)
 
 
 class RetrievedDocument(BaseModel):
@@ -154,6 +156,13 @@ def retrieve_documents(
     knowledge_collection = collection or get_knowledge_collection(
         persist_directory=persist_directory
     )
+    logger.info(
+        "RAG retrieval query=%r destination=%r collection=%r filters=%s",
+        normalized_query,
+        destination,
+        getattr(knowledge_collection, "name", "travel_knowledge"),
+        where,
+    )
     if knowledge_collection.count() == 0:
         return []
 
@@ -170,7 +179,7 @@ def retrieve_documents(
     ids = result.get("ids", [[]])[0] or []
     distances = result.get("distances", [[]])[0] or []
 
-    return [
+    retrieved = [
         RetrievedDocument(
             content=content,
             document_id=metadata["document_id"],
@@ -185,6 +194,13 @@ def retrieve_documents(
         )
         for index, (content, metadata) in enumerate(zip(documents, metadatas, strict=True))
     ]
+    logger.info(
+        "RAG retrieval results count=%d metadata=%s distances=%s",
+        len(retrieved),
+        [document.model_dump(exclude={"content"}) for document in retrieved],
+        [document.distance for document in retrieved],
+    )
+    return retrieved
 
 
 def retrieve_documents_with_quality(

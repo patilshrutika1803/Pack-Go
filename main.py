@@ -16,6 +16,7 @@ from api.v1.trips import router as api_v1_router
 from api.v1.auth import router as auth_router
 from api.v1.users import router as users_router
 from api.v1.knowledge import router as knowledge_router, user_router as user_knowledge_router
+from api.v1.collaboration import router as collaboration_router
 from api.v1.dependencies import get_optional_current_user
 from database import User, UserPreference
 from database.connection import get_db
@@ -46,6 +47,7 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(knowledge_router)
 app.include_router(user_knowledge_router)
+app.include_router(collaboration_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -231,7 +233,7 @@ async def plan_trip_sync(request: PlanRequest, user: User | None = Depends(get_o
         final_plan = build_final_plan(output)
 
         try:
-            trip_service = TripService()
+            trip_service = TripService(db)
             saved_trip = trip_service.create_trip(trip_service.travelplan_to_trip(final_plan, user_id=user.id if user else None))
         except Exception:
             logger.exception("Failed to persist generated TravelPlan for thread_id=%s", thread_id)
@@ -331,7 +333,7 @@ async def plan_trip_stream(request: PlanRequest, user: User | None = Depends(get
                     )
                 else:
                     final_plan = build_final_plan(final_state)
-                    trip_service = TripService()
+                    trip_service = TripService(db)
                     saved_trip = trip_service.create_trip(
                         trip_service.travelplan_to_trip(final_plan, user_id=user.id if user else None)
                     )

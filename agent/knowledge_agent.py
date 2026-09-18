@@ -24,6 +24,13 @@ KNOWLEDGE_TERMS = {
     "safety",
     "transport",
     "travel",
+    "tips",
+    "things",
+    "visit",
+    "visits",
+    "activities",
+    "food",
+    "culture",
 }
 
 
@@ -33,7 +40,7 @@ def is_knowledge_query(query: str) -> bool:
         return False
     if normalized_query in {"hello", "hi", "hey", "what can you do?"}:
         return False
-    words = set(normalized_query.replace("?", " ").split())
+    words = set(normalized_query.replace("?", " ").replace("-", " ").split())
     return bool(words & KNOWLEDGE_TERMS)
 
 

@@ -167,3 +167,257 @@ class PreferenceResponse(PreferenceUpdateRequest):
     food_preference: str | None = None
     id: str
     user_id: str
+
+
+class TripGroupCreateRequest(BaseModel):
+    pass
+
+
+class TripMemberResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    trip_id: str
+    user_id: str
+    role: Literal["owner", "admin", "member"]
+    status: Literal["active", "left", "removed"]
+    joined_at: datetime
+    left_at: datetime | None = None
+    removed_at: datetime | None = None
+    user: UserResponse | None = None
+
+
+class TripMemberRoleUpdateRequest(BaseModel):
+    role: Literal["admin", "member"]
+
+
+class OwnershipTransferRequest(BaseModel):
+    target_user_id: str = Field(min_length=1, max_length=36)
+
+
+class TripMemberListResponse(BaseModel):
+    members: list[TripMemberResponse]
+
+
+class WorkspaceResponse(BaseModel):
+    trip_id: str
+    is_group: bool
+    member_count: int
+    members: list[TripMemberResponse]
+
+
+class InvitationCreateRequest(BaseModel):
+    invitee_user_id: str | None = None
+    invitee_email: str | None = Field(default=None, min_length=3, max_length=320)
+    expires_in_days: int = Field(default=7, ge=1, le=30)
+
+    @model_validator(mode="after")
+    def target_required(self):
+        if self.invitee_user_id and self.invitee_email:
+            raise ValueError("Provide at most one invitation target.")
+        return self
+
+
+class InvitationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    trip_id: str
+    invitee_user_id: str | None = None
+    invitee_email: str | None = None
+    status: str
+    expires_at: datetime
+    created_at: datetime
+    token: str | None = None
+
+
+class InvitationAcceptResponse(BaseModel):
+    invitation_id: str
+    trip_id: str
+    membership: TripMemberResponse
+
+
+class InvitationPreviewResponse(BaseModel):
+    trip_id: str
+    trip_title: str
+    destination: str
+    duration: int
+    member_count: int
+    expires_at: datetime
+    status: str
+
+
+ProposalType = Literal["destination", "hotel", "restaurant", "activity", "itinerary_item", "other"]
+
+
+class ProposalCreateRequest(BaseModel):
+    proposal_type: ProposalType
+    title: str = Field(min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=5000)
+    payload: dict[str, Any]
+    deadline: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_payload_for_type(self):
+        required = {
+            "destination": ("destination",),
+            "hotel": ("name",),
+            "restaurant": ("name",),
+            "activity": ("name",),
+            "itinerary_item": ("day_number", "value"),
+        }.get(self.proposal_type, ())
+        missing = [field for field in required if field not in self.payload or self.payload[field] in (None, "")]
+        if missing:
+            raise ValueError(f"Payload for {self.proposal_type} requires: {', '.join(missing)}.")
+        if self.proposal_type == "itinerary_item" and (not isinstance(self.payload["day_number"], int) or self.payload["day_number"] < 1):
+            raise ValueError("itinerary_item day_number must be a positive integer.")
+        return self
+
+
+class ProposalUpdateRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=5000)
+    payload: dict[str, Any] | None = None
+    deadline: datetime | None = None
+
+
+class ProposalResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    trip_id: str
+    created_by_user_id: str
+    proposal_type: str
+    title: str
+    description: str | None
+    payload: dict[str, Any]
+    status: str
+    deadline: datetime | None
+    created_at: datetime
+    updated_at: datetime
+    closed_at: datetime | None
+    vote_count: int = 0
+
+
+class ProposalListResponse(BaseModel):
+    proposals: list[ProposalResponse]
+
+
+class VoteRequest(BaseModel):
+    choice_key: str = Field(min_length=1, max_length=120)
+
+
+class VoteResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    proposal_id: str
+    user_id: str
+    choice_key: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProposalResultResponse(BaseModel):
+    proposal_id: str
+    status: str
+    counts: dict[str, int]
+    winner: str | None
+    ties: list[str] = []
+    user_vote: str | None = None
+    decision: "DecisionResponse | None" = None
+
+
+class DecisionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    trip_id: str
+    proposal_id: str
+    decided_by_user_id: str
+    result: str
+    decision_type: str
+    vote_counts: dict[str, int]
+    proposal_snapshot: dict[str, Any]
+    applied_action: dict[str, Any] | None
+    source_revision: int | None
+    target_revision: int | None
+    created_at: datetime
+
+
+class DecisionApplyResponse(BaseModel):
+    decision: DecisionResponse
+    applied: bool
+
+
+class ChecklistItemCreateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=5000)
+    assigned_to_user_id: str | None = None
+    due_at: datetime | None = None
+
+
+class ChecklistItemUpdateRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=5000)
+    assigned_to_user_id: str | None = None
+    due_at: datetime | None = None
+    completed: bool | None = None
+
+    @model_validator(mode="after")
+    def require_update(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one checklist field is required.")
+        return self
+
+
+class ChecklistItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    trip_id: str
+    created_by_user_id: str
+    assigned_to_user_id: str | None
+    title: str
+    description: str | None
+    completed: bool
+    completed_by_user_id: str | None
+    completed_at: datetime | None
+    due_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class MessageCreateRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
+
+    @model_validator(mode="after")
+    def body_not_blank(self):
+        if not self.body.strip():
+            raise ValueError("Message cannot be blank.")
+        return self
+
+
+class MessageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    trip_id: str
+    sender_user_id: str
+    body: str
+    created_at: datetime
+    edited_at: datetime | None
+    deleted_at: datetime | None
+
+
+class MessagePageResponse(BaseModel):
+    messages: list[MessageResponse]
+    next_cursor: str | None = None
+
+
+class NotificationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    recipient_user_id: str
+    trip_id: str | None
+    event_type: str
+    payload: dict[str, Any]
+    read_at: datetime | None
+    created_at: datetime
+
+
+class NotificationListResponse(BaseModel):
+    notifications: list[NotificationResponse]

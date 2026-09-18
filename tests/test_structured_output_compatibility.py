@@ -103,6 +103,26 @@ def test_itinerary_agent_uses_provider_aware_structured_output(monkeypatch):
     assert called == [itinerary_module.ItineraryOutput]
 
 
+def test_itinerary_output_normalizes_omitted_final_day_fields_without_relaxing_day_schema():
+    output = itinerary_module.ItineraryOutput.model_validate({
+        "itinerary": [
+            {
+                "day_number": 4,
+                "theme": "Departure & Relax",
+                "hotel": {"name": "Inn", "stars": 3, "price_per_night": 1000, "description": "Central"},
+                "meals": [],
+            }
+        ]
+    })
+
+    day = output.itinerary[0]
+    assert day.day_number == 4
+    assert day.attractions == []
+    assert day.activities == []
+    assert day.transport.mode == "Not specified"
+    assert day.estimated_day_cost == 0
+
+
 def test_itinerary_agent_reconciles_budget_with_generated_day_costs(monkeypatch):
     generated_day = itinerary_module.ItineraryOutput(
         itinerary=[

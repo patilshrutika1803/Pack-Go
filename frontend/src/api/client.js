@@ -59,6 +59,72 @@ export const tripsApi = {
   regenerateDay: (id, dayNumber) => request(`/trips/${id}/days/${dayNumber}/regenerate`, { method: 'PATCH' }),
 }
 
+export const groupTripsApi = {
+  workspace: (id) => request(`/trips/${id}/workspace`),
+  convert: (id) => request(`/trips/${id}/group`, { method: 'POST', body: JSON.stringify({}) }),
+}
+
+export const membersApi = {
+  list: (id) => request(`/trips/${id}/members`),
+  updateRole: (tripId, userId, role) => request(`/trips/${tripId}/members/${userId}`, { method: 'PATCH', body: JSON.stringify({ role }) }),
+  remove: (tripId, userId) => request(`/trips/${tripId}/members/${userId}`, { method: 'DELETE' }),
+  leave: (tripId) => request(`/trips/${tripId}/leave`, { method: 'POST', body: JSON.stringify({}) }),
+  transfer: (tripId, target_user_id) => request(`/trips/${tripId}/ownership`, { method: 'POST', body: JSON.stringify({ target_user_id }) }),
+}
+
+export const invitationsApi = {
+  list: (id) => request(`/trips/${id}/invitations`),
+  create: (id, payload) => request(`/trips/${id}/invitations`, { method: 'POST', body: JSON.stringify(payload) }),
+  preview: (token) => request(`/invitations/${token}`),
+  accept: (token) => request(`/invitations/${token}/accept`, { method: 'POST', body: JSON.stringify({}) }),
+  revoke: (id) => request(`/trip-invitations/${id}/revoke`, { method: 'POST', body: JSON.stringify({}) }),
+}
+
+export const proposalsApi = {
+  list: (id) => request(`/trips/${id}/proposals`),
+  create: (id, payload) => request(`/trips/${id}/proposals`, { method: 'POST', body: JSON.stringify(payload) }),
+  vote: (id, choice_key) => request(`/proposals/${id}/vote`, { method: 'PUT', body: JSON.stringify({ choice_key }) }),
+  removeVote: (id) => request(`/proposals/${id}/vote`, { method: 'DELETE' }),
+  update: (id, payload) => request(`/proposals/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  close: (id) => request(`/proposals/${id}/close`, { method: 'POST', body: JSON.stringify({}) }),
+  results: (id) => request(`/proposals/${id}/results`),
+  finalize: (id) => request(`/proposals/${id}/finalize`, { method: 'POST', body: JSON.stringify({}) }),
+  decision: (id) => request(`/proposals/${id}/decision`),
+}
+
+export const decisionsApi = {
+  list: (id) => request(`/trips/${id}/decisions`),
+  get: (id) => request(`/proposals/${id}/decision`),
+  apply: (id) => request(`/decisions/${id}/apply`, { method: 'POST', body: JSON.stringify({}) }),
+  replan: (id) => request(`/decisions/${id}/replan`, { method: 'POST', body: JSON.stringify({}) }),
+}
+
+export const checklistApi = {
+  list: (id, filters = {}) => {
+    const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value !== undefined && value !== ''))
+    return request(`/trips/${id}/checklist${query.toString() ? `?${query}` : ''}`)
+  },
+  create: (id, payload) => request(`/trips/${id}/checklist`, { method: 'POST', body: JSON.stringify(payload) }),
+  update: (id, payload) => request(`/checklist-items/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  complete: (id) => request(`/checklist-items/${id}/complete`, { method: 'POST', body: JSON.stringify({}) }),
+  reopen: (id) => request(`/checklist-items/${id}/reopen`, { method: 'POST', body: JSON.stringify({}) }),
+  remove: (id) => request(`/checklist-items/${id}`, { method: 'DELETE' }),
+}
+
+export const messagesApi = {
+  list: (id, cursor) => request(`/trips/${id}/messages${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`),
+  create: (id, body) => request(`/trips/${id}/messages`, { method: 'POST', body: JSON.stringify({ body }) }),
+  update: (id, body) => request(`/messages/${id}`, { method: 'PATCH', body: JSON.stringify({ body }) }),
+  remove: (id) => request(`/messages/${id}`, { method: 'DELETE' }),
+}
+
+export const notificationsApi = {
+  list: () => request('/notifications'),
+  unreadCount: () => request('/notifications/unread-count'),
+  read: (id) => request(`/notifications/${id}/read`, { method: 'PATCH', body: JSON.stringify({}) }),
+  readAll: () => request('/notifications/read-all', { method: 'POST', body: JSON.stringify({}) }),
+}
+
 export const preferencesApi = {
   get: () => request('/users/me/preferences'),
   update: (payload) => request('/users/me/preferences', {

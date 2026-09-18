@@ -38,7 +38,9 @@ def isolated_trip_service(tmp_path, monkeypatch):
 
     trip_service_module = importlib.reload(trip_service_module)
 
-    return trip_service_module.TripService()
+    session = connection_module.SessionLocal()
+    yield trip_service_module.TripService(session)
+    session.close()
 
 
 @pytest.fixture
@@ -397,24 +399,11 @@ def test_regenerate_day_rolls_back_on_db_failure(isolated_trip_service, represen
         lambda trip, day_number: replacement_day.model_dump(mode="json"),
     )
 
-    import database.connection as connection_module
-
-    real_factory = connection_module.SessionLocal
-
-    class CommitFailSession:
-        def __init__(self):
-            self._inner = real_factory()
-
-        def __getattr__(self, name):
-            return getattr(self._inner, name)
-
-        def commit(self):
-            raise RuntimeError("database write failure")
-
-        def rollback(self):
-            return self._inner.rollback()
-
-    monkeypatch.setattr(connection_module, "SessionLocal", lambda: CommitFailSession())
+    monkeypatch.setattr(
+        isolated_trip_service.db,
+        "commit",
+        lambda: (_ for _ in ()).throw(RuntimeError("database write failure")),
+    )
 
     with pytest.raises(RuntimeError, match="Failed to regenerate trip day."):
         isolated_trip_service.regenerate_day(created_trip.id, 2)
