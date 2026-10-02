@@ -35,6 +35,12 @@ def test_registration_login_current_user_and_duplicate_email(auth_client):
     result = register(auth_client, "traveler@example.com")
     assert result["user"]["is_verified"] is False
     assert auth_client.get("/api/v1/users/me", headers=auth_header(result)).json()["email"] == "traveler@example.com"
+    login = auth_client.post(
+        "/api/v1/auth/login",
+        json={"email": "traveler@example.com", "password": "password123"},
+    )
+    assert login.status_code == 200
+    assert login.json()["user"]["is_verified"] is False
     duplicate = auth_client.post("/api/v1/auth/register", json={"name": "Other", "email": "TRAVELER@example.com", "password": "password123"})
     assert duplicate.status_code == 409
     assert duplicate.json()["error"] == "An account with this email already exists."

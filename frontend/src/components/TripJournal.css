@@ -1,0 +1,27 @@
+.trip-journal { display: grid; gap: 28px; }
+.journal-statistics { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 1px; overflow: hidden; border: 2px solid var(--ink); background: var(--ink); }
+.journal-statistics > div { min-width: 0; display: grid; align-content: center; gap: 5px; min-height: 102px; padding: 16px; background: var(--yellow); }
+.journal-statistics > div:nth-child(2n) { background: var(--teal); }
+.journal-statistics > div:nth-child(3n) { background: var(--surface); }
+.journal-statistics strong { overflow-wrap: anywhere; font: 700 23px 'Space Grotesk', sans-serif; }
+.journal-statistics span, .journal-author { color: var(--muted); font-size: 12px; font-weight: 700; }
+.journal-compose { max-width: 850px; }
+.journal-compose h2, .journal-heading h2 { font-size: 30px; }
+.journal-editor { display: grid; gap: 14px; }
+.journal-editor label { display: grid; gap: 7px; font-size: 12px; font-weight: 700; }
+.journal-editor input, .journal-editor textarea { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: white; color: var(--ink); font: inherit; }
+.journal-editor textarea { min-height: 92px; resize: vertical; }
+.journal-editor input:focus, .journal-editor textarea:focus { border-color: var(--primary); outline: 3px solid rgba(61,92,255,.16); }
+.journal-editor-actions, .journal-entry-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.journal-success { color: #176c4e; font-size: 13px; font-weight: 700; }
+.journal-timeline { display: grid; gap: 19px; }
+.journal-heading, .journal-entry-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.journal-entry-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.journal-entry { display: grid; grid-template-columns: minmax(130px, 190px) minmax(0, 1fr); gap: 22px; padding: 22px 0; border-top: 1px solid var(--border-light); }
+.journal-entry time { color: var(--primary); font-size: 13px; font-weight: 700; }
+.journal-entry article { min-width: 0; display: grid; gap: 12px; }
+.journal-entry h3 { overflow-wrap: anywhere; font-size: 22px; }
+.journal-content { line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.journal-media { display: grid; gap: 6px; margin: 0; padding-left: 18px; overflow-wrap: anywhere; }
+.journal-media a { color: var(--primary); }
+@media (max-width: 600px) { .journal-entry { grid-template-columns: 1fr; gap: 9px; }.journal-entry-heading { align-items: flex-start; flex-direction: column; }.journal-heading { align-items: flex-start; } }

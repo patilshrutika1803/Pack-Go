@@ -17,7 +17,7 @@ def test_concurrent_ownership_transfers_leave_one_owner(tmp_path):
     owner = User(id=str(uuid4()), name="Owner", email=f"owner-{uuid4()}@example.com", password_hash="hash")
     first = User(id=str(uuid4()), name="First", email=f"first-{uuid4()}@example.com", password_hash="hash")
     second = User(id=str(uuid4()), name="Second", email=f"second-{uuid4()}@example.com", password_hash="hash")
-    trip = Trip(id=str(uuid4()), user_id=owner.id, title="Transfer", destination="Goa", duration=2, total_budget=500, budget_currency="INR", group_size=3, travel_style="balanced", interests=[], things_to_avoid=[], itinerary=[], revision_history=[], data_freshness={})
+    trip = Trip(id=str(uuid4()), user_id=owner.id, is_group=True, title="Transfer", destination="Goa", duration=2, total_budget=500, budget_currency="INR", group_size=3, travel_style="balanced", interests=[], things_to_avoid=[], itinerary=[], revision_history=[], data_freshness={})
     with Session() as db:
         db.add_all([owner, first, second, trip, TripMember(id=str(uuid4()), trip_id=trip.id, user_id=owner.id, role="owner", status="active"), TripMember(id=str(uuid4()), trip_id=trip.id, user_id=first.id, role="member", status="active"), TripMember(id=str(uuid4()), trip_id=trip.id, user_id=second.id, role="member", status="active")])
         db.commit()

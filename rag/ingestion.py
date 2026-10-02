@@ -48,7 +48,7 @@ def ingest_pdf(pdf_path: str | Path, destination: str, category: str, document_t
         raise ValueError("PDF document contains no extractable text")
     texts = [item.text for item in chunks]
     embeddings = embed_texts(texts, embedding_model)
-    metadatas = [{"document_id": document_id, "source": item.source, "filename": item.filename, "page": item.page, "chunk_index": item.chunk_index, "destination": destination, "category": category, "document_type": document_type} for item in chunks]
+    metadatas = [{"document_id": document_id, "source": item.source, "filename": item.filename, "page": item.page, "chunk_index": item.chunk_index, "destination": destination.casefold(), "category": category.casefold(), "document_type": document_type.casefold()} for item in chunks]
     ids = [chunk_id(document_id, item.page, item.chunk_index) for item in chunks]
     collection = get_knowledge_collection(persist_directory=persist_directory)
     replace_document_chunks(collection, document_id, texts, embeddings, metadatas, ids)

@@ -12,6 +12,7 @@ export default function TravelGuidePage() {
   const [error, setError] = useState('')
   const [messages, setMessages] = useState([])
   const [asking, setAsking] = useState(false)
+  const [failedQuestion, setFailedQuestion] = useState('')
   const requestId = useRef(0)
 
   useEffect(() => {
@@ -44,9 +45,13 @@ export default function TravelGuidePage() {
   const updateFilter = (event) => setFilters((current) => ({ ...current, [event.target.name]: event.target.value }))
   const resetFilters = () => setFilters(EMPTY_FILTERS)
 
-  const askQuestion = async (question) => {
+  const askQuestion = async (question, appendUser = true) => {
     setAsking(true)
-    setMessages((current) => [...current, { role: 'user', content: question, id: `${Date.now()}-question` }])
+    setError('')
+    setFailedQuestion('')
+    if (appendUser) {
+      setMessages((current) => [...current, { role: 'user', content: question, id: `${Date.now()}-question` }])
+    }
     try {
       const answer = await knowledgeApi.ask({
         question,
@@ -60,8 +65,13 @@ export default function TravelGuidePage() {
         sources: answer.sources || [],
         id: `${Date.now()}-answer`,
       }])
+      if (answer.retrieval_status === 'generation_failed') {
+        setError('The travel guide could not generate an answer right now.')
+        setFailedQuestion(question)
+      }
     } catch (requestError) {
       setError(requestError.message)
+      setFailedQuestion(question)
     } finally {
       setAsking(false)
     }
@@ -77,7 +87,7 @@ export default function TravelGuidePage() {
       <div className="travel-guide-stat"><strong>{documents.length}</strong><span>available sources</span></div>
     </header>
 
-    {error && <div className="knowledge-message travel-guide-error" role="alert">{error}</div>}
+    {error && <div className="knowledge-message travel-guide-error" role="alert">{error}{failedQuestion && <button className="text-button" onClick={() => askQuestion(failedQuestion, false)} disabled={asking}>Retry question</button>}</div>}
 
     <div className="travel-guide-layout">
       <div className="travel-guide-browse">

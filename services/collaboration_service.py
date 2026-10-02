@@ -7,7 +7,7 @@ from collections import Counter
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
 
@@ -25,7 +25,7 @@ class TripAccessService:
     def get_trip_for_member(self, trip_id: str, user_id: str) -> Trip:
         trip = self.db.scalar(select(Trip).where(Trip.id == trip_id))
         active_member = self.db.scalar(select(TripMember.id).where(TripMember.trip_id == trip_id, TripMember.user_id == user_id, TripMember.status == "active"))
-        if trip is None or (active_member is None and trip.user_id != user_id):
+        if trip is None or (trip.is_group and active_member is None) or (not trip.is_group and trip.user_id != user_id):
             raise AccessDenied("Trip not found.")
         return trip
 
@@ -38,6 +38,9 @@ class TripAccessService:
         return list(self.db.scalars(select(Trip).where((Trip.user_id == user_id) | membership).order_by(Trip.created_at.desc(), Trip.id.desc())).all())
 
     def member(self, trip_id: str, user_id: str) -> TripMember:
+        trip = self.db.get(Trip, trip_id)
+        if trip is None or not trip.is_group:
+            raise AccessDenied("Trip not found.")
         member = self.db.scalar(select(TripMember).where(TripMember.trip_id == trip_id, TripMember.user_id == user_id, TripMember.status == "active"))
         if member is None:
             raise AccessDenied("Trip not found.")
@@ -54,25 +57,30 @@ class TripAccessService:
         return trip
 
     def require_owner(self, trip_id: str, user_id: str) -> TripMember:
-        trip = self.get_trip_for_member(trip_id, user_id)
-        member = self.db.scalar(select(TripMember).where(TripMember.trip_id == trip_id, TripMember.user_id == user_id, TripMember.status == "active"))
-        if (member is None and trip.user_id == user_id) or (member is not None and member.role == "owner"):
+        self.get_trip_for_member(trip_id, user_id)
+        member = self.member(trip_id, user_id)
+        if member.role == "owner":
             return member
-        if member is None or member.role != "owner":
-            raise AccessDenied("Owner access required.")
-        return member
+        raise AccessDenied("Owner access required.")
 
     def require_admin_or_owner(self, trip_id: str, user_id: str) -> TripMember:
-        trip = self.get_trip_for_member(trip_id, user_id)
-        member = self.db.scalar(select(TripMember).where(TripMember.trip_id == trip_id, TripMember.user_id == user_id, TripMember.status == "active"))
-        if member is None and trip.user_id == user_id:
-            return member
-        if member is None or member.role not in {"owner", "admin"}:
+        self.get_trip_for_member(trip_id, user_id)
+        member = self.member(trip_id, user_id)
+        if member.role not in {"owner", "admin"}:
             raise AccessDenied("Administrator access required.")
         return member
 
     def require_can_edit_trip(self, trip_id: str, user_id: str) -> TripMember | None:
+        trip = self.get_trip_for_member(trip_id, user_id)
+        if not trip.is_group:
+            return None
         return self.require_admin_or_owner(trip_id, user_id)
+
+    def require_can_delete_trip(self, trip_id: str, user_id: str) -> TripMember | None:
+        trip = self.get_trip_for_member(trip_id, user_id)
+        if not trip.is_group:
+            return None
+        return self.require_owner(trip_id, user_id)
 
     def require_can_vote(self, trip_id: str, user_id: str) -> TripMember:
         return self.member(trip_id, user_id)
@@ -150,6 +158,7 @@ class GroupTripService:
         trip = self.db.scalar(select(Trip).where(Trip.id == trip_id).with_for_update())
         if trip is None or trip.user_id != user_id:
             raise AccessDenied("Trip not found.")
+        trip.is_group = True
         member = self.db.scalar(select(TripMember).where(TripMember.trip_id == trip_id, TripMember.user_id == user_id))
         if member is None:
             self.db.add(TripMember(id=str(uuid4()), trip_id=trip_id, user_id=user_id, role="owner", status="active"))
@@ -159,7 +168,7 @@ class GroupTripService:
         return trip
 
     def workspace(self, trip_id: str, user_id: str) -> dict:
-        self.access.get_trip_for_member(trip_id, user_id)
+        self.access.member(trip_id, user_id)
         members = list(self.db.scalars(select(TripMember).options(selectinload(TripMember.user)).where(TripMember.trip_id == trip_id, TripMember.status == "active").order_by(TripMember.joined_at)).all())
         return {"trip_id": trip_id, "is_group": True, "member_count": len(members), "members": members}
 
@@ -226,7 +235,7 @@ class GroupTripService:
         elif normalized_email:
             target_filters.append(TripInvitation.invitee_email == normalized_email)
         else:
-            target_filters.append(TripInvitation.invitee_user_id.is_(None), TripInvitation.invitee_email.is_(None))
+            target_filters.extend((TripInvitation.invitee_user_id.is_(None), TripInvitation.invitee_email.is_(None)))
         duplicate = self.db.scalar(select(TripInvitation.id).where(TripInvitation.trip_id == trip_id, TripInvitation.status == "pending", TripInvitation.expires_at > now(), *target_filters))
         if duplicate: raise ValueError("An active invitation already exists.")
         raw = secrets.token_urlsafe(32)
@@ -253,10 +262,20 @@ class GroupTripService:
         invitation = self.db.scalar(select(TripInvitation).where(TripInvitation.token_hash == token_digest(raw_token)).with_for_update())
         if invitation is None or invitation.status != "pending" or as_utc(invitation.expires_at) <= now() or (invitation.invitee_user_id and invitation.invitee_user_id != user.id) or (invitation.invitee_email and invitation.invitee_email.lower() != user.email.lower()):
             raise AccessDenied("Invitation is invalid or expired.")
+        accepted_at = now()
+        claim = self.db.execute(
+            update(TripInvitation)
+            .where(TripInvitation.id == invitation.id, TripInvitation.status == "pending")
+            .values(status="accepted", accepted_at=accepted_at)
+        )
+        if claim.rowcount != 1:
+            self.db.rollback()
+            raise AccessDenied("Invitation is invalid or expired.")
+        invitation.status = "accepted"
+        invitation.accepted_at = accepted_at
         member = self.db.scalar(select(TripMember).where(TripMember.trip_id == invitation.trip_id, TripMember.user_id == user.id))
         if member is None: member = TripMember(id=str(uuid4()), trip_id=invitation.trip_id, user_id=user.id, role="member", status="active"); self.db.add(member)
         else: member.status = "active"; member.left_at = None; member.removed_at = None
-        invitation.status = "accepted"; invitation.accepted_at = now()
         notify(self.db, invitation.trip_id, active_recipient_ids(self.db, invitation.trip_id, user.id), "member_joined", {"trip_id": invitation.trip_id})
         try:
             self.db.commit()
@@ -398,7 +417,7 @@ class ProposalService:
             for day_number in range(1, len(trip.itinerary or []) + 1):
                 TripService(self.db).regenerate_day(trip.id, day_number)
         except Exception as exc:
-            action["replanning"] = "failed"; action["replanning_error"] = str(exc)[:500]
+            action["replanning"] = "failed"; action["replanning_error"] = "Itinerary replanning failed."
             decision.applied_action = action; self.db.commit()
             raise RuntimeError("Destination replanning failed; the decision was preserved.") from exc
         action["replanning"] = "completed"; decision.applied_action = action; decision.target_revision = len(trip.revision_history or [])

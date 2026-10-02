@@ -21,7 +21,12 @@ class FakeGroq:
         if schema is research_module.ResearchOutput:
             return research_module.ResearchOutput(places=[], restaurants=[])
         if schema is itinerary_module.ItineraryOutput:
-            return itinerary_module.ItineraryOutput(itinerary=[])
+            return itinerary_module.ItineraryOutput(
+                itinerary=[
+                    {"day_number": day_number, "theme": f"Day {day_number}"}
+                    for day_number in range(1, 4)
+                ]
+            )
         raise AssertionError(f"Unexpected schema: {schema}")
 
     def bind_tools(self, tools):
@@ -100,6 +105,7 @@ def test_itinerary_agent_uses_provider_aware_structured_output(monkeypatch):
     })
 
     assert response["completed_agents"] == ["ItineraryAgent"]
+    assert len(response["itinerary"]) == 3
     assert called == [itinerary_module.ItineraryOutput]
 
 

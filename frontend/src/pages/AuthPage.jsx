@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
-import { authApi } from '../api/client'
 
 export default function AuthPage({ mode }) {
   const isRegister = mode === 'register'
@@ -11,8 +10,6 @@ export default function AuthPage({ mode }) {
   const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' })
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
-  const [verificationToken, setVerificationToken] = useState('')
-  const [verificationMessage, setVerificationMessage] = useState('')
   const [loginMode, setLoginMode] = useState('user')
   const requestedNext = new URLSearchParams(location.search).get('next')
   const next = requestedNext?.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/trips'
@@ -30,10 +27,7 @@ export default function AuthPage({ mode }) {
     if (form.password.length < 8) return setError('Use at least 8 characters for your password.')
     try {
       const result = await (isRegister ? register(form) : login({ email: form.email, password: form.password }))
-      if (isRegister && result.verification_token) {
-        setVerificationToken(result.verification_token)
-        setVerificationMessage('Account created. Verify your email before continuing.')
-      } else if (loginMode === 'admin' && !result.user?.is_admin) {
+      if (loginMode === 'admin' && !result.user?.is_admin) {
         setError('This account does not have administrator access.')
       } else {
         navigate(loginMode === 'admin' ? '/admin/knowledge' : next, { replace: true })
@@ -84,7 +78,6 @@ export default function AuthPage({ mode }) {
             {error && <p className="form-error" role="alert">{error}</p>}
             <button className="button button-primary submit-button" disabled={isLoading}>{isLoading ? 'Loading...' : isRegister ? 'Create account →' : 'Log in →'}</button>
           </form>
-          {isRegister && verificationToken && <div className="auth-form-meta"><span>{verificationMessage}</span><button type="button" className="text-button" onClick={async () => { try { await authApi.verifyEmail(verificationToken); setVerificationMessage('Email verified successfully.'); navigate(next, { replace: true }) } catch (err) { setError(err.message || 'Unable to verify your email right now. Please try again.') } }}>Verify email</button></div>}
           {!isRegister && <>
             <div className="auth-form-meta"><span>Secure access to your trips</span><Link className="auth-link-muted" to="/forgot-password">Forgot password?</Link></div>
             <div className="auth-divider"><span>OR</span></div>

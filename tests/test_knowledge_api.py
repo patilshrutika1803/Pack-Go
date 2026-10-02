@@ -129,6 +129,33 @@ def test_user_knowledge_ask_reuses_grounded_answer_contract(auth_client, monkeyp
     assert captured["state"]["knowledge_category"] == "travel_guide"
 
 
+def test_user_knowledge_ask_returns_safe_generation_failure_status(auth_client, monkeypatch):
+    user = register(auth_client, "knowledge-generation-failure@example.com")
+    answer = GroundedAnswer(
+        answer="I could not generate a grounded answer from the travel knowledge base right now.",
+        sources=[],
+        grounded=False,
+        query="What should I know about Goa?",
+        retrieved_document_count=1,
+        retrieval_status="generation_failed",
+    )
+    monkeypatch.setattr(
+        "api.v1.knowledge.knowledge_agent_node",
+        lambda _state: {"knowledge_answer": answer},
+    )
+
+    response = auth_client.post(
+        "/api/v1/knowledge/ask",
+        headers=auth_header(user),
+        json={"question": "What should I know about Goa?"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["retrieval_status"] == "generation_failed"
+    assert response.json()["grounded"] is False
+    assert response.json()["sources"] == []
+
+
 @pytest.mark.parametrize(
     ("parameter", "value", "expected"),
     [

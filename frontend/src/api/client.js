@@ -3,6 +3,33 @@ const LEGACY_PLAN_ERROR = 'Unable to generate the travel plan at this time. Plea
 const PREFERENCE_ERROR = 'Unable to save your preferences. Please try again.'
 const PREFERENCE_VALIDATION_ERROR = 'Some preference values are invalid. Please check your selections.'
 const PREFERENCE_FIELDS = ['travel_style', 'interests', 'things_to_avoid', 'budget_preference', 'hotel_preference', 'food_preference', 'preferred_destinations', 'preferred_budget_min', 'preferred_budget_max', 'preferred_currency', 'preferred_trip_duration', 'is_domestic']
+const TOKEN_KEY = 'pack-go-token'
+const REFRESH_KEY = 'pack-go-refresh-token'
+let refreshRequest
+
+function refreshAccessToken() {
+  if (!refreshRequest) {
+    refreshRequest = (async () => {
+      const refreshToken = localStorage.getItem(REFRESH_KEY)
+      if (!refreshToken) throw new Error('No refresh token is available.')
+      const response = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok || !result.access_token || !result.refresh_token) {
+        throw new Error('Unable to refresh the session.')
+      }
+      localStorage.setItem(TOKEN_KEY, result.access_token)
+      localStorage.setItem(REFRESH_KEY, result.refresh_token)
+      localStorage.setItem('pack-go-user', JSON.stringify(result.user))
+      window.dispatchEvent(Object.assign(new Event('pack-go-session-refreshed'), { detail: result }))
+      return result.access_token
+    })().finally(() => { refreshRequest = null })
+  }
+  return refreshRequest
+}
 
 function authErrorMessage(path, detail) {
   if (Array.isArray(detail)) {
@@ -16,13 +43,24 @@ function authErrorMessage(path, detail) {
 }
 
 async function request(path, options = {}) {
-  const token = localStorage.getItem('pack-go-token')
-  const authorization = token && !options.headers?.Authorization ? { Authorization: `Bearer ${token}` } : {}
   const isFormData = options.body instanceof FormData
-  const response = await fetch(`${API_BASE}${path}`, {
+  const send = (token) => fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: { ...(isFormData ? {} : { 'Content-Type': 'application/json' }), ...authorization, ...(options.headers || {}) },
+    headers: {
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      ...(token && !options.headers?.Authorization ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+      ...(token && options.headers?.Authorization ? { Authorization: `Bearer ${token}` } : {}),
+    },
   })
+  let response = await send(localStorage.getItem(TOKEN_KEY))
+  if (response.status === 401 && !path.startsWith('/auth/')) {
+    try {
+      response = await send(await refreshAccessToken())
+    } catch {
+      window.dispatchEvent(new Event('pack-go-session-expired'))
+    }
+  }
   const body = await response.json().catch(() => ({}))
   if (!response.ok) {
     if (response.status === 401 && !path.startsWith('/auth/')) window.dispatchEvent(new Event('pack-go-session-expired'))
@@ -34,7 +72,9 @@ async function request(path, options = {}) {
       : path.startsWith('/users/me/preferences') && (!detail || detail === LEGACY_PLAN_ERROR)
         ? PREFERENCE_ERROR
         : detail || 'Something went wrong. Please try again.'
-    throw new Error(message)
+    const error = new Error(message)
+    error.status = response.status
+    throw error
   }
   return body
 }
@@ -57,6 +97,40 @@ export const tripsApi = {
   update: (id, payload) => request(`/trips/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   remove: (id) => request(`/trips/${id}`, { method: 'DELETE' }),
   regenerateDay: (id, dayNumber) => request(`/trips/${id}/days/${dayNumber}/regenerate`, { method: 'PATCH' }),
+  packing: (id) => request(`/trips/${id}/utilities/packing`),
+  map: (id) => request(`/trips/${id}/utilities/map`),
+  routeLocations: (id) => request(`/trips/${id}/route/locations`),
+  optimizeRoute: (id, payload) => request(`/trips/${id}/route/optimize`, { method: 'POST', body: JSON.stringify(payload) }),
+  optimizeItineraryCsp: (id) => request(`/trips/${id}/itinerary/csp-optimize`, { method: 'POST', body: JSON.stringify({}) }),
+  optimizeItineraryGa: (id, payload = {}) => request(`/trips/${id}/itinerary/ga-optimize`, { method: 'POST', body: JSON.stringify(payload) }),
+}
+
+export const placesApi = {
+  search: (location, category) => request(`/utilities/places?location=${encodeURIComponent(location)}&category=${encodeURIComponent(category)}`),
+}
+
+export const weatherApi = {
+  current: (location) => request(`/utilities/weather?location=${encodeURIComponent(location)}`),
+}
+
+export const currencyApi = {
+  convert: (amount, fromCurrency, toCurrency) => request(`/utilities/currency?amount=${encodeURIComponent(amount)}&from_currency=${encodeURIComponent(fromCurrency)}&to_currency=${encodeURIComponent(toCurrency)}`),
+}
+
+export const expensesApi = {
+  list: (tripId) => request(`/trips/${tripId}/expenses`),
+  summary: (tripId) => request(`/trips/${tripId}/expenses/summary`),
+  create: (tripId, payload) => request(`/trips/${tripId}/expenses`, { method: 'POST', body: JSON.stringify(payload) }),
+  update: (expenseId, payload) => request(`/expenses/${expenseId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  remove: (expenseId) => request(`/expenses/${expenseId}`, { method: 'DELETE' }),
+}
+
+export const journalApi = {
+  list: (tripId) => request(`/trips/${tripId}/journal`),
+  statistics: (tripId) => request(`/trips/${tripId}/journal/statistics`),
+  create: (tripId, payload) => request(`/trips/${tripId}/journal`, { method: 'POST', body: JSON.stringify(payload) }),
+  update: (entryId, payload) => request(`/journal-entries/${entryId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  remove: (entryId) => request(`/journal-entries/${entryId}`, { method: 'DELETE' }),
 }
 
 export const groupTripsApi = {
@@ -146,4 +220,8 @@ export const knowledgeApi = {
   upload: (formData) => request('/admin/knowledge/documents', { method: 'POST', body: formData }),
   reindex: (id) => request(`/admin/knowledge/documents/${id}/reindex`, { method: 'POST' }),
   remove: (id) => request(`/admin/knowledge/documents/${id}`, { method: 'DELETE' }),
+}
+
+export const adminApi = {
+  overview: () => request('/admin/overview'),
 }

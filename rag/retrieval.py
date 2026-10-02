@@ -121,7 +121,7 @@ def _build_where(
     document_type: str | None,
 ) -> dict[str, Any] | None:
     conditions = [
-        {field: value}
+        {field: value.casefold()}
         for field, value in zip(
             FILTER_FIELDS,
             (destination, category, document_type),

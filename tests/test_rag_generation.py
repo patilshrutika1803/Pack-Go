@@ -71,7 +71,7 @@ def test_grounding_validator_accepts_title_from_retrieved_filename():
 def test_grounded_response_preserves_retrieved_sources(monkeypatch):
     captured = {}
 
-    def fake_invoke(chain_builder, messages):
+    def fake_invoke(chain_builder, messages, **_kwargs):
         captured["system"] = messages[0].content
         captured["human"] = messages[1].content
         return GroundedAnswer(
@@ -104,10 +104,41 @@ def test_grounded_response_preserves_retrieved_sources(monkeypatch):
     assert "do not fabricate" in system_prompt
 
 
+def test_grounded_response_accepts_source_title_from_metadata(monkeypatch):
+    monkeypatch.setattr(
+        "rag.generation.invoke_with_fallback",
+        lambda *_args, **_kwargs: {
+            "answer": "The Goa Travel Guide describes Goa as a preferred holiday destination.",
+            "sources": [{
+                "document_id": "doc-1",
+                "filename": "Goa-Travel-Guide.pdf",
+                "source": "guide.pdf",
+                "page": 1,
+                "chunk_index": 0,
+                "destination": "Goa",
+                "category": "travel_guide",
+                "document_type": "destination_guide",
+            }],
+            "grounded": True,
+            "query": "What does the Goa Travel Guide say about Goa?",
+            "retrieved_document_count": 1,
+        },
+    )
+
+    response = generate_grounded_answer(
+        "What does the Goa Travel Guide say about Goa?",
+        [_document()],
+    )
+
+    assert response.answer.startswith("The Goa Travel Guide")
+    assert response.grounded is True
+    assert response.sources[0].filename == "Goa-Travel-Guide.pdf"
+
+
 def test_direct_udaipur_answer_is_grounded_with_retrieved_citation(monkeypatch):
     monkeypatch.setattr(
         "rag.generation.invoke_with_fallback",
-        lambda *_args: {
+        lambda *_args, **_kwargs: {
             "answer": "The City Palace Museum in Udaipur is a historic palace complex.",
             "sources": [{
                 "document_id": "udaipur-doc",
@@ -136,7 +167,7 @@ def test_direct_udaipur_answer_is_grounded_with_retrieved_citation(monkeypatch):
 def test_udaipur_broad_attraction_list_is_rejected_as_insufficient(monkeypatch):
     monkeypatch.setattr(
         "rag.generation.invoke_with_fallback",
-        lambda *_args: {
+        lambda *_args, **_kwargs: {
             "answer": (
                 "Udaipur attractions include City Palace, Lake Pichola, Jag Mandir, "
                 "Saheliyon-Ki-Bari, Fateh Sagar Lake, and Monsoon Palace."
@@ -169,7 +200,7 @@ def test_udaipur_broad_attraction_list_is_rejected_as_insufficient(monkeypatch):
 def test_unrelated_mongolia_answer_is_rejected_without_citations(monkeypatch):
     monkeypatch.setattr(
         "rag.generation.invoke_with_fallback",
-        lambda *_args: {
+        lambda *_args, **_kwargs: {
             "answer": "The capital of Mongolia is Ulaanbaatar.",
             "sources": [{
                 "document_id": "udaipur-doc",
@@ -199,7 +230,7 @@ def test_unrelated_mongolia_answer_is_rejected_without_citations(monkeypatch):
 def test_multiple_sources_are_separated_and_duplicates_are_removed(monkeypatch):
     captured = {}
 
-    def fake_invoke(_chain_builder, messages):
+    def fake_invoke(_chain_builder, messages, **_kwargs):
         captured["human"] = messages[1].content
         return {
             "answer": "The guide contains beach information.",
@@ -217,7 +248,7 @@ def test_multiple_sources_are_separated_and_duplicates_are_removed(monkeypatch):
 
 
 def test_fabricated_provider_sources_are_removed(monkeypatch):
-    def fake_invoke(_chain_builder, _messages):
+    def fake_invoke(_chain_builder, _messages, **_kwargs):
         return {
             "answer": "The context supports this answer.",
             "sources": [{
@@ -243,7 +274,7 @@ def test_fabricated_provider_sources_are_removed(monkeypatch):
 
 
 def test_malformed_provider_response_is_safe(monkeypatch):
-    monkeypatch.setattr("rag.generation.invoke_with_fallback", lambda *_args: {"answer": "missing fields"})
+    monkeypatch.setattr("rag.generation.invoke_with_fallback", lambda *_args, **_kwargs: {"answer": "missing fields"})
 
     response = generate_grounded_answer("best beaches", [_document()])
 
@@ -256,7 +287,7 @@ def test_malformed_provider_response_is_safe(monkeypatch):
 def test_provider_failure_is_safe(monkeypatch):
     monkeypatch.setattr(
         "rag.generation.invoke_with_fallback",
-        lambda *_args: (_ for _ in ()).throw(RuntimeError("secret provider token")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("secret provider token")),
     )
 
     response = generate_grounded_answer("best beaches", [_document()])
@@ -268,8 +299,8 @@ def test_provider_failure_is_safe(monkeypatch):
 def test_existing_fallback_helper_is_used_for_primary_and_secondary_provider(monkeypatch):
     calls = []
 
-    def fake_invoke(chain_builder, messages):
-        calls.append((chain_builder, messages))
+    def fake_invoke(chain_builder, messages, **kwargs):
+        calls.append((chain_builder, messages, kwargs))
         return {
             "answer": "Grounded answer.",
             "sources": [],
@@ -284,3 +315,35 @@ def test_existing_fallback_helper_is_used_for_primary_and_secondary_provider(mon
     assert response.answer == "Grounded answer."
     assert len(calls) == 1
     assert calls[0][1][0].content.startswith("You answer travel questions")
+    assert calls[0][2]["fallback_on_primary_failure"] is True
+
+
+def test_rag_provider_failure_tries_configured_fallback(monkeypatch):
+    from utils import llm_loader
+
+    calls = []
+
+    class FakeProvider:
+        def __init__(self, name):
+            self.name = name
+
+    class FakeChain:
+        def __init__(self, provider):
+            self.provider = provider
+
+        def invoke(self, *_args, **_kwargs):
+            calls.append(self.provider.name)
+            if self.provider.name == "groq":
+                raise RuntimeError("401 invalid credentials")
+            return "gemini response"
+
+    monkeypatch.setattr(llm_loader, "get_primary_llm", lambda: FakeProvider("groq"))
+    monkeypatch.setattr(llm_loader, "get_fallback_llm", lambda: FakeProvider("gemini"))
+
+    result = llm_loader.invoke_with_fallback(
+        FakeChain,
+        fallback_on_primary_failure=True,
+    )
+
+    assert result == "gemini response"
+    assert calls == ["groq", "gemini"]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -83,8 +84,230 @@ class TripDayRegenerationResponse(BaseModel):
     updated_at: datetime
 
 
+class RouteOptimizationRequest(BaseModel):
+    start_location_id: str | None = Field(default=None, min_length=1, max_length=100)
+    goal_location_id: str | None = Field(default=None, min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_location_pair(self):
+        if (self.start_location_id is None) != (self.goal_location_id is None):
+            raise ValueError("Provide both a start location and a destination.")
+        if self.start_location_id is not None and self.start_location_id == self.goal_location_id:
+            raise ValueError("Start location and destination must be different.")
+        return self
+
+
+class ItineraryCSPRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class ItineraryGARequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    population_size: int = Field(default=20, ge=4, le=100)
+    generations: int = Field(default=20, ge=1, le=100)
+    mutation_rate: float = Field(default=0.1, ge=0, le=1)
+    random_seed: int | None = Field(default=None, ge=0, le=4_294_967_295)
+
+
 class DeleteTripResponse(BaseModel):
     message: str
+
+
+ExpenseCategory = Literal["accommodation", "food", "transport", "activities", "shopping", "other"]
+ExpenseSplitType = Literal["equal", "custom"]
+
+
+class ExpenseParticipantInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    user_id: str = Field(min_length=1, max_length=36)
+    amount: Decimal | None = Field(default=None, gt=0, max_digits=12, decimal_places=2)
+
+
+class ExpenseCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    payer_user_id: str | None = Field(default=None, min_length=1, max_length=36)
+    category: ExpenseCategory
+    expense_date: date = Field(default_factory=date.today)
+    description: str | None = Field(default=None, max_length=2000)
+    split_type: ExpenseSplitType = "equal"
+    participants: list[ExpenseParticipantInput] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_participants(self):
+        _validate_expense_split(self.amount, self.split_type, self.participants)
+        return self
+
+
+class ExpenseUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    amount: Decimal | None = Field(default=None, gt=0, max_digits=12, decimal_places=2)
+    payer_user_id: str | None = Field(default=None, min_length=1, max_length=36)
+    category: ExpenseCategory | None = None
+    expense_date: date | None = None
+    description: str | None = Field(default=None, max_length=2000)
+    split_type: ExpenseSplitType | None = None
+    participants: list[ExpenseParticipantInput] | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def validate_requested_split(self):
+        if not self.model_fields_set:
+            raise ValueError("At least one field must be provided.")
+        if self.participants is not None:
+            _validate_unique_expense_participants(self.participants)
+            if self.split_type == "equal" and any(item.amount is not None for item in self.participants):
+                raise ValueError("Equal split participants must not include amounts.")
+            if self.split_type == "custom" and any(item.amount is None for item in self.participants):
+                raise ValueError("Custom split participants must include an amount.")
+        return self
+
+
+def _validate_unique_expense_participants(participants: list[ExpenseParticipantInput]) -> None:
+    ids = [participant.user_id for participant in participants]
+    if len(ids) != len(set(ids)):
+        raise ValueError("Expense participants must be unique.")
+
+
+def _validate_expense_split(amount: Decimal, split_type: ExpenseSplitType, participants: list[ExpenseParticipantInput]) -> None:
+    _validate_unique_expense_participants(participants)
+    if split_type == "equal" and any(item.amount is not None for item in participants):
+        raise ValueError("Equal split participants must not include amounts.")
+    if split_type == "custom":
+        if any(item.amount is None for item in participants):
+            raise ValueError("Custom split participants must include an amount.")
+        if sum((item.amount for item in participants), Decimal("0")) != amount:
+            raise ValueError("Custom participant shares must equal the expense amount.")
+
+
+class ExpenseParticipantResponse(BaseModel):
+    user_id: str
+    name: str
+    amount: Decimal
+
+
+class ExpenseResponse(BaseModel):
+    id: str
+    trip_id: str
+    created_by_user_id: str
+    payer_user_id: str
+    payer_name: str
+    amount: Decimal
+    category: ExpenseCategory
+    expense_date: date
+    description: str | None
+    split_type: ExpenseSplitType
+    participants: list[ExpenseParticipantResponse]
+    created_at: datetime
+    updated_at: datetime
+
+
+class ExpenseParticipantBalance(BaseModel):
+    user_id: str
+    name: str
+    total_paid: Decimal
+    total_owed: Decimal
+    balance: Decimal
+
+
+class ExpenseSettlement(BaseModel):
+    from_user_id: str
+    from_name: str
+    to_user_id: str
+    to_name: str
+    amount: Decimal
+
+
+class ExpenseSummaryResponse(BaseModel):
+    trip_id: str
+    expense_count: int
+    total_expenses: Decimal
+    category_totals: dict[str, Decimal]
+    date_totals: dict[str, Decimal]
+    participants: list[ExpenseParticipantBalance]
+    settlements: list[ExpenseSettlement]
+
+
+class JournalEntryCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str | None = Field(default=None, max_length=255)
+    content: str = Field(min_length=1, max_length=10000)
+    occurred_at: datetime | None = None
+    media_references: list[str] = Field(default_factory=list, max_length=10)
+
+    @model_validator(mode="after")
+    def validate_journal_content_and_media(self):
+        from urllib.parse import urlsplit
+
+        self.content = self.content.strip()
+        if not self.content:
+            raise ValueError("Journal content must not be empty.")
+        if self.title is not None:
+            self.title = self.title.strip() or None
+        for reference in self.media_references:
+            parsed = urlsplit(reference.strip())
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+                raise ValueError("Media references must be absolute HTTP or HTTPS URLs.")
+        self.media_references = [reference.strip() for reference in self.media_references]
+        return self
+
+
+class JournalEntryUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str | None = Field(default=None, max_length=255)
+    content: str | None = Field(default=None, min_length=1, max_length=10000)
+    occurred_at: datetime | None = None
+    media_references: list[str] | None = Field(default=None, max_length=10)
+
+    @model_validator(mode="after")
+    def validate_requested_fields(self):
+        from urllib.parse import urlsplit
+
+        if not self.model_fields_set:
+            raise ValueError("At least one field must be provided.")
+        if "content" in self.model_fields_set and self.content is None:
+            raise ValueError("Journal content must not be empty.")
+        if "occurred_at" in self.model_fields_set and self.occurred_at is None:
+            raise ValueError("Journal date and time must not be empty.")
+        if "media_references" in self.model_fields_set and self.media_references is None:
+            raise ValueError("Media references must be a list.")
+        if self.content is not None:
+            self.content = self.content.strip()
+            if not self.content:
+                raise ValueError("Journal content must not be empty.")
+        if self.title is not None:
+            self.title = self.title.strip() or None
+        if self.media_references is not None:
+            for reference in self.media_references:
+                parsed = urlsplit(reference.strip())
+                if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+                    raise ValueError("Media references must be absolute HTTP or HTTPS URLs.")
+            self.media_references = [reference.strip() for reference in self.media_references]
+        return self
+
+
+class JournalEntryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    trip_id: str
+    created_by_user_id: str
+    author_name: str
+    title: str | None
+    content: str
+    occurred_at: datetime
+    media_references: list[str]
+    created_at: datetime
+    updated_at: datetime
+
+
+class TripJournalStatisticsResponse(BaseModel):
+    trip_id: str
+    planned_duration_days: int
+    journal_entry_count: int
+    journal_days_covered: int
+    media_reference_count: int
+    expense_total: Decimal
+    expense_currency: str
 
 
 class RegisterRequest(BaseModel):
@@ -397,6 +620,7 @@ class MessageResponse(BaseModel):
     id: str
     trip_id: str
     sender_user_id: str
+    sender_name: str | None = None
     body: str
     created_at: datetime
     edited_at: datetime | None

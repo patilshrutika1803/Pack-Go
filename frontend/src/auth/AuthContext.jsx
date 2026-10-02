@@ -26,8 +26,18 @@ export function AuthProvider({ children }) {
       setToken(null)
       setRefreshToken(null)
     }
+    const handleSessionRefreshed = (event) => {
+      if (!event.detail?.access_token || !event.detail?.refresh_token || !event.detail?.user) return
+      setUser(event.detail.user)
+      setToken(event.detail.access_token)
+      setRefreshToken(event.detail.refresh_token)
+    }
     window.addEventListener('pack-go-session-expired', handleSessionExpired)
-    return () => window.removeEventListener('pack-go-session-expired', handleSessionExpired)
+    window.addEventListener('pack-go-session-refreshed', handleSessionRefreshed)
+    return () => {
+      window.removeEventListener('pack-go-session-expired', handleSessionExpired)
+      window.removeEventListener('pack-go-session-refreshed', handleSessionRefreshed)
+    }
   }, [])
 
   useEffect(() => {

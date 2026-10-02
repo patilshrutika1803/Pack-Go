@@ -16,6 +16,7 @@ import KnowledgeCenterPage from './pages/KnowledgeCenterPage'
 import TravelGuidePage from './pages/TravelGuidePage'
 import AdminRoute from './routes/AdminRoute'
 import InvitationAcceptPage from './pages/InvitationAcceptPage'
+import AdminDashboardPage from './pages/AdminDashboardPage'
 import './App.css'
 
 export default function App() {
@@ -41,7 +42,10 @@ export default function App() {
               <Route path="/preferences" element={<PreferencesPage />} />
               <Route path="/travel-guide" element={<TravelGuidePage />} />
             </Route>
-            <Route element={<AdminRoute />}><Route path="/admin/knowledge" element={<KnowledgeCenterPage />} /></Route>
+            <Route element={<AdminRoute />}>
+              <Route path="/admin" element={<AdminDashboardPage />} />
+              <Route path="/admin/knowledge" element={<KnowledgeCenterPage />} />
+            </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

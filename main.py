@@ -17,6 +17,10 @@ from api.v1.auth import router as auth_router
 from api.v1.users import router as users_router
 from api.v1.knowledge import router as knowledge_router, user_router as user_knowledge_router
 from api.v1.collaboration import router as collaboration_router
+from api.v1.expenses import router as expenses_router
+from api.v1.journal import router as journal_router
+from api.v1.utilities import router as utilities_router
+from api.v1.admin import router as admin_router
 from api.v1.dependencies import get_optional_current_user
 from database import User, UserPreference
 from database.connection import get_db
@@ -48,6 +52,10 @@ app.include_router(users_router)
 app.include_router(knowledge_router)
 app.include_router(user_knowledge_router)
 app.include_router(collaboration_router)
+app.include_router(expenses_router)
+app.include_router(journal_router)
+app.include_router(utilities_router)
+app.include_router(admin_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -269,13 +277,35 @@ async def plan_trip_stream(request: PlanRequest, user: User | None = Depends(get
             
             yield format_sse_event("running", "System", "Starting PACK & GO workflow...", data={"thread_id": thread_id})
             
-            # Stream events as nodes complete
+            # Debug stream events expose actual node starts and results.
             for event in graph.stream(
                 {"messages": [request.question], "saved_preferences_context": _saved_preferences_context(user, db)},
                 config=config,
+                stream_mode="debug",
             ):
-                for node_name, node_state in event.items():
-                    yield format_sse_event("running", node_name, f"{node_name} completed processing.", data=None)
+                payload = event.get("payload", {})
+                node_name = payload.get("name")
+                if not node_name:
+                    continue
+                if event.get("type") == "task":
+                    yield format_sse_event("agent_started", node_name, f"{node_name} is working.")
+                elif event.get("type") == "task_result":
+                    result = payload.get("result") or {}
+                    failed_agents = result.get("failed_agents", []) if isinstance(result, dict) else []
+                    weather = result.get("weather_info") if isinstance(result, dict) else None
+                    fallback_used = getattr(weather, "fallback_used", False)
+                    if isinstance(weather, dict):
+                        fallback_used = weather.get("fallback_used", False)
+                    if fallback_used:
+                        event_status = "agent_fallback"
+                        message = f"{node_name} completed with fallback data."
+                    elif payload.get("error") is not None or node_name in failed_agents:
+                        event_status = "agent_error"
+                        message = f"{node_name} could not complete its step."
+                    else:
+                        event_status = "agent_completed"
+                        message = f"{node_name} completed processing."
+                    yield format_sse_event(event_status, node_name, message)
             
             # Get the FULL merged state after all nodes have run
             final_state = graph.get_state(config).values

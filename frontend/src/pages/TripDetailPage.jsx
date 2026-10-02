@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { checklistApi, decisionsApi, groupTripsApi, invitationsApi, membersApi, messagesApi, notificationsApi, proposalsApi, tripsApi } from '../api/client'
 import { useAuth } from '../auth/useAuth'
 import PlanCard from '../components/PlanCard'
+import ExpenseManager from '../components/ExpenseManager'
 import { GroupChat } from '../components/group/GroupChat'
 import { GroupChecklist } from '../components/group/GroupChecklist'
 import { GroupDecisions } from '../components/group/GroupDecisions'
@@ -11,6 +12,11 @@ import { GroupMembers } from '../components/group/GroupMembers'
 import { GroupNotifications } from '../components/group/GroupNotifications'
 import { GroupOverview } from '../components/group/GroupOverview'
 import { GroupProposals } from '../components/group/GroupProposals'
+import TripUtilities from '../components/TripUtilities'
+import TripJournal from '../components/TripJournal'
+
+const TRIP_TABS = ['overview', 'journal', 'utilities']
+const GROUP_TABS = [...TRIP_TABS, 'expenses', 'members', 'proposals', 'decisions', 'checklist', 'chat', 'notifications']
 
 function tripToPlan(trip) {
   return {
@@ -60,9 +66,19 @@ export default function TripDetailPage() {
   const [proposalResults, setProposalResults] = useState({})
   const [sectionLoading, setSectionLoading] = useState(false)
   const refreshGeneration = useRef(0)
+  const canManageInvitations = workspace?.members.some(member => member.user_id === user?.id && ['owner', 'admin'].includes(member.role)) ?? false
   useEffect(() => {
     tripsApi.get(tripId).then(setTrip).then(() => groupTripsApi.workspace(tripId).then(setWorkspace).catch(() => {})).catch(err => setError(err.message)).finally(() => setLoading(false))
   }, [tripId])
+  useEffect(() => {
+    const requestedTab = new URLSearchParams(location.search).get('tab')
+    const availableTabs = workspace ? GROUP_TABS : TRIP_TABS
+    if (requestedTab && availableTabs.includes(requestedTab)) setTab(requestedTab)
+  }, [location.search, workspace])
+  useEffect(() => {
+    if (!trip || !workspace || workspace.itinerary === trip.itinerary) return
+    setWorkspace(current => current ? { ...current, itinerary: trip.itinerary } : current)
+  }, [trip, workspace])
   useEffect(() => {
     if (!workspace) return
     const generation = ++refreshGeneration.current
@@ -89,8 +105,14 @@ export default function TripDetailPage() {
           if (isCurrent()) setNotifications(result.notifications)
         }
         if (tab === 'members') {
-          const result = await invitationsApi.list(tripId)
-          if (isCurrent()) setInvitations(result)
+          const [memberResult, invitationResult] = await Promise.all([
+            membersApi.list(tripId),
+            canManageInvitations ? invitationsApi.list(tripId) : Promise.resolve([]),
+          ])
+          if (isCurrent()) {
+            setWorkspace(current => current ? { ...current, members: memberResult.members, member_count: memberResult.members.length } : current)
+            setInvitations(invitationResult)
+          }
         }
         if (tab === 'decisions') {
           const result = await decisionsApi.list(tripId)
@@ -104,7 +126,7 @@ export default function TripDetailPage() {
     }
     load()
     return () => { refreshGeneration.current += 1 }
-  }, [tab, tripId, workspace, checklistFilter])
+  }, [tab, tripId, workspace, checklistFilter, canManageInvitations])
   useEffect(() => {
     if (!workspace) return undefined
     let active = true
@@ -116,7 +138,11 @@ export default function TripDetailPage() {
       try {
         if (tab === 'proposals') {
           const result = await proposalsApi.list(tripId)
-          if (active && generation === refreshGeneration.current) setProposals(result.proposals)
+          const entries = await Promise.all(result.proposals.map(async proposal => [proposal.id, await proposalsApi.results(proposal.id)]))
+          if (active && generation === refreshGeneration.current) {
+            setProposals(result.proposals)
+            setProposalResults(Object.fromEntries(entries))
+          }
         }
         if (tab === 'checklist') {
           const filters = checklistFilter === 'all' ? {} : checklistFilter === 'overdue' ? { overdue: true } : { completed: checklistFilter === 'completed' }
@@ -131,6 +157,20 @@ export default function TripDetailPage() {
           const result = await notificationsApi.list()
           if (active && generation === refreshGeneration.current) setNotifications(result.notifications)
         }
+        if (tab === 'members') {
+          const [memberResult, invitationResult] = await Promise.all([
+            membersApi.list(tripId),
+            canManageInvitations ? invitationsApi.list(tripId) : Promise.resolve([]),
+          ])
+          if (active && generation === refreshGeneration.current) {
+            setWorkspace(current => current ? { ...current, members: memberResult.members, member_count: memberResult.members.length } : current)
+            setInvitations(invitationResult)
+          }
+        }
+        if (tab === 'decisions') {
+          const result = await decisionsApi.list(tripId)
+          if (active && generation === refreshGeneration.current) setDecisions(result)
+        }
       } catch (err) {
         if (active && generation === refreshGeneration.current) setError(err.message)
       } finally {
@@ -138,10 +178,16 @@ export default function TripDetailPage() {
       }
     }, 20000)
     return () => { active = false; refreshGeneration.current += 1; window.clearInterval(refresh) }
-  }, [tab, tripId, workspace, checklistFilter])
+  }, [tab, tripId, workspace, checklistFilter, canManageInvitations])
   const remove = async () => {
     if (!window.confirm('Delete this trip permanently?')) return
     try { await tripsApi.remove(tripId); navigate('/trips', { replace: true, state: { message: 'Trip deleted successfully.' } }) } catch (err) { setError(err.message) }
+  }
+  const refreshProposals = async () => {
+    const result = await proposalsApi.list(tripId)
+    const entries = await Promise.all(result.proposals.map(async proposal => [proposal.id, await proposalsApi.results(proposal.id)]))
+    setProposals(result.proposals)
+    setProposalResults(Object.fromEntries(entries))
   }
   const regenerate = async (dayNumber) => {
     setMessage('Regenerating day...'); setError('')
@@ -152,8 +198,8 @@ export default function TripDetailPage() {
     } catch (err) { setError(err.message); setMessage('') }
   }
   const convert = async () => { try { setWorkspace(await groupTripsApi.convert(tripId)) } catch (err) { setError(err.message) } }
-  const createProposal = async payload => { try { await proposalsApi.create(tripId, payload); setTab('proposals') } catch (err) { setError(err.message) } }
-  const mutateProposal = async (action, id, payload) => { try { await action(id, payload); const result = await proposalsApi.list(tripId); setProposals(result.proposals) } catch (err) { setError(err.message) } }
+  const createProposal = async payload => { try { await proposalsApi.create(tripId, payload); await refreshProposals(); setTab('proposals') } catch (err) { setError(err.message) } }
+  const mutateProposal = async (action, id, payload) => { try { await action(id, payload); await refreshProposals() } catch (err) { setError(err.message) } }
   const refreshChecklist = async () => setChecklist(await checklistApi.list(tripId, checklistFilter === 'all' ? {} : checklistFilter === 'overdue' ? { overdue: true } : checklistFilter === 'open' ? { completed: false } : { completed: true }))
   const refreshMessages = async () => { const result = await messagesApi.list(tripId); setMessages(result.messages); setMessageCursor(result.next_cursor) }
   const refreshNotifications = async () => setNotifications((await notificationsApi.list()).notifications)
@@ -179,7 +225,8 @@ export default function TripDetailPage() {
   const openNotification = notification => { if (notification.trip_id) setTab(notification.event_type.includes('proposal') || notification.event_type.includes('decision') ? 'proposals' : notification.event_type.includes('checklist') ? 'checklist' : notification.event_type.includes('message') ? 'chat' : 'members') }
   if (loading) return <section className="page-container placeholder"><p className="eyebrow">Trip detail</p><h1>Loading your itinerary...</h1></section>
   if (error || !trip) return <section className="page-container placeholder"><p className="form-error" role="alert">{error || 'Trip not found.'}</p><Link className="button button-primary" to="/trips">Back to My Trips</Link></section>
-  const tabs = workspace ? ['overview', 'members', 'proposals', 'decisions', 'checklist', 'chat', 'notifications'] : ['overview']
+  const tabs = workspace ? GROUP_TABS : TRIP_TABS
   const currentMember = workspace?.members.find(member => member.user_id === user?.id)
-  return <section className="page-container trips-page"><div className="page-title-row"><div><Link to="/trips" className="text-button">← My trips</Link><p className="eyebrow">{workspace ? 'Group workspace' : 'Saved trip'}</p><h1>{trip.destination}</h1><p className="page-lede">Created {new Date(trip.created_at).toLocaleDateString()}</p></div><div>{!workspace && <button className="button button-primary" onClick={convert}>Convert to group</button>}<button className="button button-quiet" onClick={remove}>Delete trip</button></div></div>{message && <p className="page-lede" role="status">{message}</p>}{workspace && <nav className="trip-tabs" aria-label="Trip workspace"><div>{tabs.map(item => <button key={item} className={tab === item ? 'button button-primary' : 'button button-quiet'} onClick={() => setTab(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}</div></nav>}{tab === 'overview' && (workspace ? <><GroupOverview workspace={workspace} onOpenTab={setTab} /><PlanCard plan={tripToPlan(trip)} onRegenerate={regenerate} /></> : <PlanCard plan={tripToPlan(trip)} onRegenerate={regenerate} />)}{tab === 'members' && <GroupMembers workspace={workspace} user={user} inviteEmail={inviteEmail} setInviteEmail={setInviteEmail} invite={invite} leave={leave} transfer={transfer} updateMember={updateMember} removeMember={removeMember} />} {tab === 'members' && workspace && <GroupInvitations invitations={invitations} revokeInvitation={revokeInvitation} />}{tab === 'proposals' && <GroupProposals proposals={proposals} results={proposalResults} createProposal={createProposal} vote={(id, choice) => mutateProposal(proposalsApi.vote, id, choice).then(() => setMessage('Vote recorded.'))} removeVote={id => mutateProposal(proposalsApi.removeVote, id)} close={id => mutateProposal(proposalsApi.close, id)} updateProposal={proposal => mutateProposal(proposalsApi.update, proposal.id, { title: window.prompt('Proposal title', proposal.title) || proposal.title })} canManage={currentMember?.role !== 'member'} finalize={id => proposalsApi.finalize(id).then(() => setTab('decisions')).catch(err => setError(err.message))} />}{tab === 'checklist' && <GroupChecklist checklist={checklist} workspace={workspace} draft={draft} setDraft={setDraft} description={checklistDescription} setDescription={setChecklistDescription} assignee={checklistAssignee} setAssignee={setChecklistAssignee} dueAt={checklistDueAt} setDueAt={setChecklistDueAt} addChecklist={addChecklist} updateChecklist={updateChecklist} editChecklist={editChecklist} assignChecklist={assignChecklist} deleteChecklist={deleteChecklist} filter={checklistFilter} setFilter={setChecklistFilter} loading={sectionLoading} error={error} />}{tab === 'chat' && <GroupChat messages={messages} draft={draft} setDraft={setDraft} sendMessage={sendMessage} editMessage={editMessage} deleteMessage={deleteMessage} loadOlder={loadOlderMessages} hasMore={Boolean(messageCursor)} loading={sectionLoading} error={error} canChat={Boolean(currentMember)} userId={user?.id} canModerate={currentMember?.role === 'owner' || currentMember?.role === 'admin'} />}{tab === 'decisions' && <GroupDecisions decisions={decisions} applyDecision={applyDecision} replanDecision={replanDecision} />}{tab === 'notifications' && <GroupNotifications notifications={notifications} readAll={readAllNotifications} read={readNotification} openNotification={openNotification} loading={sectionLoading} error={error} />}</section>
+  return <section className="page-container trips-page"><div className="page-title-row"><div><Link to="/trips" className="text-button">← My trips</Link><p className="eyebrow">{workspace ? 'Group workspace' : 'Saved trip'}</p><h1>{trip.destination}</h1><p className="page-lede">Created {new Date(trip.created_at).toLocaleDateString()}</p></div><div>{!workspace && <button className="button button-primary" onClick={convert}>Convert to group</button>}<button className="button button-quiet" onClick={remove}>Delete trip</button></div></div>{message && <p className="page-lede" role="status">{message}</p>}<nav className="trip-tabs" aria-label="Trip workspace"><div>{tabs.map(item => <button key={item} className={tab === item ? 'button button-primary' : 'button button-quiet'} onClick={() => setTab(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}</div></nav>{tab === 'overview' && (workspace ? <><GroupOverview workspace={workspace} onOpenTab={setTab} /><PlanCard plan={tripToPlan(trip)} onRegenerate={regenerate} /></> : <><PlanCard plan={tripToPlan(trip)} onRegenerate={regenerate} /><ExpenseManager tripId={tripId} members={[{ user_id: user?.id, user: { name: user?.name }, status: 'active' }]} user={user} currency={trip.budget_currency} /></>)}{tab === 'journal' && <TripJournal trip={trip} user={user} />}{tab === 'utilities' && <TripUtilities trip={trip} />}{tab === 'expenses' && workspace && <ExpenseManager tripId={tripId} members={workspace.members} user={user} currentRole={currentMember?.role} currency={trip.budget_currency} />}
+{tab === 'members' && <GroupMembers workspace={workspace} user={user} inviteEmail={inviteEmail} setInviteEmail={setInviteEmail} invite={invite} leave={leave} transfer={transfer} updateMember={updateMember} removeMember={removeMember} />} {tab === 'members' && workspace && <GroupInvitations invitations={invitations} revokeInvitation={revokeInvitation} />}{tab === 'proposals' && <GroupProposals proposals={proposals} results={proposalResults} createProposal={createProposal} vote={(id, choice) => mutateProposal(proposalsApi.vote, id, choice).then(() => setMessage('Vote recorded.'))} removeVote={id => mutateProposal(proposalsApi.removeVote, id)} close={id => mutateProposal(proposalsApi.close, id)} updateProposal={proposal => mutateProposal(proposalsApi.update, proposal.id, { title: window.prompt('Proposal title', proposal.title) || proposal.title })} canManage={currentMember?.role !== 'member'} finalize={id => proposalsApi.finalize(id).then(() => setTab('decisions')).catch(err => setError(err.message))} />}{tab === 'checklist' && <GroupChecklist checklist={checklist} workspace={workspace} draft={draft} setDraft={setDraft} description={checklistDescription} setDescription={setChecklistDescription} assignee={checklistAssignee} setAssignee={setChecklistAssignee} dueAt={checklistDueAt} setDueAt={setChecklistDueAt} addChecklist={addChecklist} updateChecklist={updateChecklist} editChecklist={editChecklist} assignChecklist={assignChecklist} deleteChecklist={deleteChecklist} filter={checklistFilter} setFilter={setChecklistFilter} loading={sectionLoading} error={error} />}{tab === 'chat' && <GroupChat messages={messages} draft={draft} setDraft={setDraft} sendMessage={sendMessage} editMessage={editMessage} deleteMessage={deleteMessage} loadOlder={loadOlderMessages} hasMore={Boolean(messageCursor)} loading={sectionLoading} error={error} canChat={Boolean(currentMember)} userId={user?.id} canModerate={currentMember?.role === 'owner' || currentMember?.role === 'admin'} />}{tab === 'decisions' && <GroupDecisions decisions={decisions} applyDecision={applyDecision} replanDecision={replanDecision} />}{tab === 'notifications' && <GroupNotifications notifications={notifications} readAll={readAllNotifications} read={readNotification} openNotification={openNotification} loading={sectionLoading} error={error} />}</section>
 }

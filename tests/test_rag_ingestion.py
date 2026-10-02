@@ -67,7 +67,7 @@ def test_ingestion_indexes_and_reindexes_without_touching_preferences(tmp_path, 
     assert result["status"] == "indexed"
     assert result == again
     assert len(stored["ids"]) == result["chunks"]
-    assert all(metadata["destination"] == "Goa" for metadata in stored["metadatas"])
+    assert all(metadata["destination"] == "goa" for metadata in stored["metadatas"])
     assert all(metadata["category"] == "travel_guide" and metadata["document_type"] == "destination_guide" for metadata in stored["metadatas"])
     assert all(metadata["filename"] == source_pdf.name and metadata["page"] >= 1 for metadata in stored["metadatas"])
     assert all(item.startswith(result["document_id"] + ":") for item in stored["ids"])

@@ -17,7 +17,7 @@ def test_failed_invitation_acceptance_rolls_back_membership_and_status(tmp_path)
     Session = sessionmaker(bind=engine, expire_on_commit=False)
     owner = User(id=str(uuid4()), name="Owner", email=f"owner-{uuid4()}@example.com", password_hash="hash")
     invitee = User(id=str(uuid4()), name="Invitee", email=f"invitee-{uuid4()}@example.com", password_hash="hash")
-    trip = Trip(id=str(uuid4()), user_id=owner.id, title="Rollback", destination="Goa", duration=2, total_budget=500, budget_currency="INR", group_size=2, travel_style="balanced", interests=[], things_to_avoid=[], itinerary=[], revision_history=[], data_freshness={})
+    trip = Trip(id=str(uuid4()), user_id=owner.id, is_group=True, title="Rollback", destination="Goa", duration=2, total_budget=500, budget_currency="INR", group_size=2, travel_style="balanced", interests=[], things_to_avoid=[], itinerary=[], revision_history=[], data_freshness={})
     raw = "rollback-token"
     invitation = TripInvitation(id=str(uuid4()), trip_id=trip.id, inviter_user_id=owner.id, invitee_user_id=invitee.id, token_hash=token_digest(raw), status="pending", expires_at=datetime.now(UTC) + timedelta(days=1))
     with Session() as db:

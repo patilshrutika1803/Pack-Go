@@ -71,11 +71,16 @@ def _safe_exception_message(exception: Exception) -> str:
         message,
     )
 
-def invoke_with_fallback(chain_builder, *args, **kwargs):
+def invoke_with_fallback(
+    chain_builder,
+    *args,
+    fallback_on_primary_failure: bool = False,
+    **kwargs,
+):
     """
     Tries to build and invoke the chain with the primary Groq LLM.
-    If Groq is rate-limited or its configured model is unavailable, it builds and
-    invokes the chain with Gemini instead.
+    Known rate-limit/model errors fall back to Gemini by default; callers may opt
+    into fallback for any primary failure with ``fallback_on_primary_failure``.
     Empty HumanMessages are stripped before the Gemini call to avoid 'contents are required'.
 
     chain_builder is a function that takes an LLM instance and returns a runnable chain
@@ -104,11 +109,11 @@ def invoke_with_fallback(chain_builder, *args, **kwargs):
             (error_indicator for error_indicator in fallback_errors if error_indicator in error_msg),
             None,
         )
-        if matched_indicator is not None:
+        if matched_indicator is not None or fallback_on_primary_failure:
             logger.warning(
                 "Groq primary call failed; switching to Gemini fallback "
                 "reason=%s exception_type=%s exception_message=%s",
-                matched_indicator,
+            matched_indicator or "primary_failure",
                 type(e).__name__,
                 _safe_exception_message(e),
             )

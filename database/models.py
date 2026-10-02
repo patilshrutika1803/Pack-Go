@@ -1,6 +1,7 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from decimal import Decimal
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, Index, text
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, Float, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint, Index, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database.base import Base
@@ -23,6 +24,13 @@ class Trip(Base):
 
     user_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("users.id"), nullable=True, index=True
+    )
+
+    is_group: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
     )
 
     title: Mapped[str] = mapped_column(
@@ -139,6 +147,8 @@ class Trip(Base):
     checklist_items: Mapped[list["ChecklistItem"]] = relationship(back_populates="trip", cascade="all, delete-orphan")
     messages: Mapped[list["GroupMessage"]] = relationship(back_populates="trip", cascade="all, delete-orphan")
     notifications: Mapped[list["Notification"]] = relationship(back_populates="trip")
+    expenses: Mapped[list["Expense"]] = relationship(back_populates="trip", cascade="all, delete-orphan")
+    journal_entries: Mapped[list["JournalEntry"]] = relationship(back_populates="trip", cascade="all, delete-orphan")
 
 
 class User(Base):
@@ -279,7 +289,7 @@ class TripInvitation(Base):
 
 class Proposal(Base):
     __tablename__ = "proposals"
-    __table_args__ = (CheckConstraint("proposal_type IN ('destination', 'hotel', 'restaurant', 'activity', 'itinerary_item', 'other')", name="ck_proposal_type"), CheckConstraint("status IN ('draft', 'open', 'closed', 'accepted', 'rejected', 'cancelled')", name="ck_proposal_status"), Index("ix_proposals_trip_status_created", "trip_id", "status", "created_at"),)
+    __table_args__ = (CheckConstraint("proposal_type IN ('destination', 'hotel', 'restaurant', 'activity', 'itinerary_item', 'other')", name="ck_proposal_type"), CheckConstraint("status IN ('draft', 'open', 'closed', 'accepted', 'rejected', 'cancelled')", name="ck_proposal_status"), Index("ix_proposals_trip_status_created", "trip_id", "status", "created_at"), Index("ix_proposals_trip_deadline", "trip_id", "deadline"))
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     trip_id: Mapped[str] = mapped_column(String(36), ForeignKey("trips.id", ondelete="CASCADE"), nullable=False)
     created_by_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
@@ -314,6 +324,7 @@ class ProposalVote(Base):
 
 class Decision(Base):
     __tablename__ = "decisions"
+    __table_args__ = (Index("ix_decisions_trip_created", "trip_id", "created_at"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     trip_id: Mapped[str] = mapped_column(String(36), ForeignKey("trips.id", ondelete="CASCADE"), nullable=False)
     proposal_id: Mapped[str] = mapped_column(String(36), ForeignKey("proposals.id", ondelete="CASCADE"), unique=True, nullable=False)
@@ -373,3 +384,66 @@ class Notification(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
     recipient: Mapped[User] = relationship(back_populates="notifications", foreign_keys=[recipient_user_id])
     trip: Mapped[Trip | None] = relationship(back_populates="notifications")
+
+
+class Expense(Base):
+    __tablename__ = "expenses"
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_expenses_amount_positive"),
+        CheckConstraint("split_type IN ('equal', 'custom')", name="ck_expenses_split_type"),
+        CheckConstraint("category IN ('accommodation', 'food', 'transport', 'activities', 'shopping', 'other')", name="ck_expenses_category"),
+        Index("ix_expenses_trip_date", "trip_id", "expense_date", "id"),
+        Index("ix_expenses_trip_category", "trip_id", "category"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    trip_id: Mapped[str] = mapped_column(String(36), ForeignKey("trips.id", ondelete="CASCADE"), nullable=False)
+    created_by_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    payer_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    category: Mapped[str] = mapped_column(String(30), nullable=False)
+    expense_date: Mapped[date] = mapped_column(Date, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    split_type: Mapped[str] = mapped_column(String(10), nullable=False, default="equal")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+
+    trip: Mapped[Trip] = relationship(back_populates="expenses")
+    creator: Mapped[User] = relationship(foreign_keys=[created_by_user_id])
+    payer: Mapped[User] = relationship(foreign_keys=[payer_user_id])
+    participants: Mapped[list["ExpenseShare"]] = relationship(back_populates="expense", cascade="all, delete-orphan")
+
+
+class ExpenseShare(Base):
+    __tablename__ = "expense_shares"
+    __table_args__ = (
+        UniqueConstraint("expense_id", "user_id", name="uq_expense_share_user"),
+        CheckConstraint("amount >= 0", name="ck_expense_share_amount_nonnegative"),
+        Index("ix_expense_shares_user", "user_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    expense_id: Mapped[str] = mapped_column(String(36), ForeignKey("expenses.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+
+    expense: Mapped[Expense] = relationship(back_populates="participants")
+    user: Mapped[User] = relationship()
+
+
+class JournalEntry(Base):
+    __tablename__ = "journal_entries"
+    __table_args__ = (Index("ix_journal_entries_trip_occurred", "trip_id", "occurred_at", "id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    trip_id: Mapped[str] = mapped_column(String(36), ForeignKey("trips.id", ondelete="CASCADE"), nullable=False)
+    created_by_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    media_references: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+
+    trip: Mapped[Trip] = relationship(back_populates="journal_entries")
+    author: Mapped[User] = relationship(foreign_keys=[created_by_user_id])

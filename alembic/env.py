@@ -6,7 +6,7 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 
 from database import Base
-from database.models import (ChecklistItem, Decision, GroupMessage, KnowledgeSource, Notification, Proposal,
+from database.models import (ChecklistItem, Decision, Expense, ExpenseShare, GroupMessage, JournalEntry, KnowledgeSource, Notification, Proposal,
                              ProposalVote, Trip, TripInvitation, TripMember, User, UserPreference)  # noqa: F401
 
 load_dotenv()

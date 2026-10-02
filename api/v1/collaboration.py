@@ -41,6 +41,12 @@ def _parse_message_cursor(cursor: str) -> tuple[datetime, str]:
     except (ValueError, UnicodeDecodeError) as exc:
         raise HTTPException(status_code=422, detail="Invalid message cursor.") from exc
 
+
+def message_out(message: GroupMessage, sender_name: str | None) -> MessageResponse:
+    response = MessageResponse.model_validate(message)
+    response.sender_name = sender_name
+    return response
+
 @router.post("/trips/{trip_id}/group", response_model=WorkspaceResponse)
 def convert(trip_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     try: GroupTripService(db).convert(trip_id, user.id); return WorkspaceResponse(**GroupTripService(db).workspace(trip_id, user.id))
@@ -90,7 +96,10 @@ def invitations(trip_id: str, db: Session = Depends(get_db), user: User = Depend
         rows = list(db.scalars(select(TripInvitation).where(TripInvitation.trip_id == trip_id).order_by(TripInvitation.created_at.desc())).all())
         changed = False
         for invitation in rows:
-            if invitation.status == "pending" and invitation.expires_at <= datetime.now(UTC):
+            expires_at = invitation.expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=UTC)
+            if invitation.status == "pending" and expires_at <= datetime.now(UTC):
                 invitation.status = "expired"
                 changed = True
         if changed:
@@ -237,26 +246,29 @@ def delete_checklist(item_id: str, db: Session = Depends(get_db), user: User = D
 def get_messages(trip_id: str, limit: int = Query(50, ge=1, le=100), cursor: str | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     try:
         GroupTripService(db).access.member(trip_id, user.id)
-        query = select(GroupMessage).where(GroupMessage.trip_id == trip_id)
+        query = select(GroupMessage, User.name).outerjoin(User, User.id == GroupMessage.sender_user_id).where(GroupMessage.trip_id == trip_id)
         if cursor:
             created_at, message_id = _parse_message_cursor(cursor)
             query = query.where((GroupMessage.created_at < created_at) | ((GroupMessage.created_at == created_at) & (GroupMessage.id < message_id)))
-        messages = list(db.scalars(query.order_by(GroupMessage.created_at.desc(), GroupMessage.id.desc()).limit(limit + 1)).all())
+        messages = list(db.execute(query.order_by(GroupMessage.created_at.desc(), GroupMessage.id.desc()).limit(limit + 1)).all())
         has_more = len(messages) > limit
         messages = messages[:limit]
         messages.reverse()
-        next_cursor = _message_cursor(messages[0].created_at, messages[0].id) if has_more and messages else None
-        return MessagePageResponse(messages=messages, next_cursor=next_cursor)
+        next_cursor = _message_cursor(messages[0][0].created_at, messages[0][0].id) if has_more and messages else None
+        return MessagePageResponse(messages=[message_out(message, sender_name) for message, sender_name in messages], next_cursor=next_cursor)
     except AccessDenied as exc: fail(exc)
 
 @router.post("/trips/{trip_id}/messages", response_model=MessageResponse, status_code=201)
 def send_message(trip_id: str, payload: MessageCreateRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    try: return CollaborationService(db).message(trip_id, user.id, payload.body)
+    try: return message_out(CollaborationService(db).message(trip_id, user.id, payload.body), user.name)
     except (AccessDenied, ValueError) as exc: fail(exc)
 
 @router.patch("/messages/{message_id}", response_model=MessageResponse)
 def update_message(message_id: str, payload: MessageCreateRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    try: return CollaborationService(db).update_message(message_id, user.id, payload.body)
+    try:
+        message = CollaborationService(db).update_message(message_id, user.id, payload.body)
+        sender_name = db.scalar(select(User.name).where(User.id == message.sender_user_id))
+        return message_out(message, sender_name)
     except (AccessDenied, ValueError) as exc: fail(exc)
 
 @router.delete("/messages/{message_id}", status_code=204)

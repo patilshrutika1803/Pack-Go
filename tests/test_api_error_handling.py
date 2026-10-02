@@ -81,8 +81,17 @@ def test_sse_plan_completion_serializes_travelplan(monkeypatch):
     )
 
     class FakeGraph:
-        def stream(self, payload, config):
-            yield {"Supervisor": {}}
+        def stream(self, payload, config, stream_mode=None):
+            assert stream_mode == "debug"
+            yield {"type": "task", "payload": {"name": "PreferenceExtractor"}}
+            yield {"type": "task_result", "payload": {
+                "name": "PreferenceExtractor", "error": None, "result": {},
+            }}
+            yield {"type": "task", "payload": {"name": "WeatherAgent"}}
+            yield {"type": "task_result", "payload": {
+                "name": "WeatherAgent", "error": None,
+                "result": {"failed_agents": ["WeatherAgent"], "weather_info": {"fallback_used": True}},
+            }}
 
         def get_state(self, config):
             return type("State", (), {"values": {"intent": "plan_trip"}})()
@@ -117,6 +126,9 @@ def test_sse_plan_completion_serializes_travelplan(monkeypatch):
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
+    assert '"status": "agent_started", "agent": "PreferenceExtractor"' in response.text
+    assert '"status": "agent_completed", "agent": "PreferenceExtractor"' in response.text
+    assert '"status": "agent_fallback", "agent": "WeatherAgent"' in response.text
     assert '"status": "done"' in response.text
     assert '"trip_id": "trip-sse-1"' in response.text
     assert main.GENERIC_ERROR_MESSAGE not in response.text

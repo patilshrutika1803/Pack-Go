@@ -7,7 +7,7 @@ def test_controlled_end_to_end_goa_question_stays_in_travel_knowledge(monkeypatc
     collection = SequencedCollection([[_item(distance=0.2)]])
     monkeypatch.setattr(
         "rag.generation.invoke_with_fallback",
-        lambda *_args: GroundedAnswer(
+        lambda *_args, **_kwargs: GroundedAnswer(
             answer="The retrieved Goa guide mentions North Goa beaches.",
             sources=[{
                 "document_id": "doc-1", "filename": "guide.pdf", "source": "guide.pdf",

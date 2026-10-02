@@ -1,0 +1,34 @@
+.utility-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.utility-panel { padding: 20px; background: var(--surface); border: 1px solid var(--border-light); border-radius: var(--radius-lg); }
+.utility-panel h2 { margin: 6px 0 16px; font-size: 20px; }
+.utility-panel h3 { margin: 18px 0 8px; font-size: 14px; }
+.utility-category h3 { text-transform: capitalize; }
+.utility-panel ul { display: grid; gap: 8px; padding-left: 20px; color: var(--text-muted); }
+.utility-panel li span { display: block; font-size: 11px; color: var(--text-dim); text-transform: capitalize; }
+.utility-panel a { color: var(--accent); }
+.utility-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.utility-controls input, .utility-controls select { min-width: 0; flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface2); color: var(--text); }
+.route-controls { align-items: end; margin-top: 16px; }
+.route-controls label { display: grid; flex: 1 1 180px; gap: 6px; color: var(--text-muted); font-size: 12px; }
+.route-controls select { width: 100%; }
+.route-result { margin-top: 18px; }
+.route-result ol { display: grid; gap: 8px; padding-left: 24px; color: var(--text-muted); }
+.route-result p { margin: 8px 0; }
+.csp-result { margin-top: 18px; }
+.csp-result h3 { margin-top: 16px; }
+.csp-result li span { display: inline; margin-left: 8px; }
+.ga-result { margin-top: 18px; }
+.ga-result > p { margin: 8px 0; }
+.ga-pipeline { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0; color: var(--text-muted); font-size: 12px; }
+.ga-pipeline span { color: var(--accent); }
+.ga-days { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+.ga-day { min-width: 0; }
+.ga-day h3 { margin: 0 0 8px; }
+.ga-day li span { display: inline; margin-left: 8px; }
+.currency-form input { width: 72px; flex: 1 1 72px; }
+.utility-results { max-height: 220px; overflow: auto; margin-top: 16px; white-space: pre-wrap; color: var(--text-muted); font: inherit; font-size: 13px; }
+.utility-result { margin-top: 16px; color: var(--text-muted); }
+.utility-note { margin: 12px 0 0; color: var(--text-dim); font-size: 12px; }
+.utility-controls button:disabled { cursor: wait; opacity: 0.7; }
+.utility-error { grid-column: 1 / -1; }
+@media (max-width: 760px) { .utility-grid { grid-template-columns: 1fr; } .ga-days { grid-template-columns: 1fr; } }

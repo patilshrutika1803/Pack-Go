@@ -74,7 +74,7 @@ def test_retrieval_returns_structured_metadata_and_distance(monkeypatch):
     ]
     assert collection.last_query["n_results"] == 1
     assert collection.last_query["where"] == {
-        "$and": [{"destination": "Goa"}, {"category": "travel_guide"}]
+        "$and": [{"destination": "goa"}, {"category": "travel_guide"}]
     }
     assert collection.last_query["include"] == ["documents", "metadatas", "distances"]
 
@@ -150,7 +150,7 @@ def test_unknown_filters_are_forwarded_to_chroma():
         )
     ]
     assert collection.last_query["where"] == {
-        "$and": [{"destination": "Atlantis"}, {"category": "unknown"}]
+        "$and": [{"destination": "atlantis"}, {"category": "unknown"}]
     }
 
 
@@ -174,7 +174,7 @@ def test_real_goa_retrieval_finds_north_goa_beaches(real_goa_collection):
 
     assert any(term in content for term in ("north goa", "keri", "arambol", "mandrem", "morjim"))
     assert len(results) <= 5
-    assert all(result.destination == "Goa" for result in results)
+    assert all(result.destination.casefold() == "goa" for result in results)
 
 
 def test_real_goa_retrieval_finds_transport_information(real_goa_collection):
@@ -201,15 +201,24 @@ def test_real_goa_retrieval_finds_central_goa_attractions(real_goa_collection):
 
 
 def test_real_goa_destination_filter(real_goa_collection):
-    results = retrieve_documents(
+    unfiltered_results = retrieve_documents(
         "What are the best beaches?",
         top_k=5,
-        destination="Goa",
         collection=real_goa_collection,
     )
 
+    assert unfiltered_results
+    destination = unfiltered_results[0].destination
+    results = retrieve_documents(
+        "What are the best beaches?",
+        top_k=5,
+        destination=destination.upper(),
+        collection=real_goa_collection,
+    )
+
+    assert results
     assert len(results) <= 5
-    assert all(result.destination == "Goa" for result in results)
+    assert all(result.destination.casefold() == destination.casefold() for result in results)
     assert Path("test-data/Goa-Travel-Guide.pdf").exists()
 
 

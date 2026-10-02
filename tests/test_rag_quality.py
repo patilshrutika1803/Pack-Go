@@ -172,7 +172,7 @@ def test_quality_wrapper_preserves_metadata_filters(monkeypatch):
     assert result.relevance_status == "strong"
     assert collection.queries[0]["where"] == {
         "$and": [
-            {"destination": "Goa"},
+            {"destination": "goa"},
             {"category": "travel_guide"},
             {"document_type": "destination_guide"},
         ]

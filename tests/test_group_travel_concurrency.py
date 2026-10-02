@@ -21,7 +21,7 @@ def setup_database(tmp_path):
 def seed_group(Session):
     owner = User(id=str(uuid4()), name="Owner", email=f"owner-{uuid4()}@example.com", password_hash="hash")
     member = User(id=str(uuid4()), name="Member", email=f"member-{uuid4()}@example.com", password_hash="hash")
-    trip = Trip(id=str(uuid4()), user_id=owner.id, title="Race", destination="Goa", duration=2, total_budget=500, budget_currency="INR", group_size=2, travel_style="balanced", interests=[], things_to_avoid=[], itinerary=[], revision_history=[], data_freshness={})
+    trip = Trip(id=str(uuid4()), user_id=owner.id, is_group=True, title="Race", destination="Goa", duration=2, total_budget=500, budget_currency="INR", group_size=2, travel_style="balanced", interests=[], things_to_avoid=[], itinerary=[], revision_history=[], data_freshness={})
     with Session() as db:
         db.add_all([owner, member, trip, TripMember(id=str(uuid4()), trip_id=trip.id, user_id=owner.id, role="owner", status="active")])
         db.commit()

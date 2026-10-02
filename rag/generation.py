@@ -171,7 +171,6 @@ def generate_grounded_answer(
         retrieval_status,
         context,
     )
-    source_content = "\n".join(document.content for document in unique_documents)
     user_content = (
         f"USER QUESTION:\n{normalized_query}\n\n"
         "RETRIEVED KNOWLEDGE CONTEXT:\n"
@@ -189,8 +188,10 @@ def generate_grounded_answer(
                 SystemMessage(content=GROUNDING_SYSTEM_PROMPT),
                 HumanMessage(content=user_content),
             ],
+            fallback_on_primary_failure=True,
         )
         answer = GroundedAnswer.model_validate(response)
+        provider_returned_sources = bool(answer.sources)
         retrieved_sources = {
             _source_key(_source_for(document)): _source_for(document)
             for document in unique_documents
@@ -200,8 +201,10 @@ def generate_grounded_answer(
             for source in answer.sources
             if _source_key(source) in retrieved_sources
         ]
-        if answer.grounded and _unsupported_named_entities(answer.answer, source_content):
+        if answer.grounded and _unsupported_named_entities(answer.answer, context):
             return _no_context_response(normalized_query, retrieval_status)
+        if answer.grounded and not provider_returned_sources:
+            answer.sources = list(retrieved_sources.values())
         if not answer.sources and answer.grounded:
             answer.grounded = False
         if not answer.grounded:

@@ -1,0 +1,39 @@
+.expense-manager { display: grid; gap: 24px; padding: 28px; border: 2px solid var(--ink); border-radius: 12px; background: var(--surface); box-shadow: 5px 5px 0 var(--ink); }
+.expense-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--border-light); }
+.expense-heading h2 { font: 700 34px 'Space Grotesk', sans-serif; }
+.expense-total { display: grid; gap: 2px; text-align: right; }
+.expense-total span, .expense-muted { color: var(--muted); font-size: 13px; }
+.expense-total strong { font: 700 25px 'Space Grotesk', sans-serif; }
+.expense-notice { color: #12684c; font-size: 13px; font-weight: 700; }
+.expense-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+.expense-summary-grid section { min-width: 0; padding: 17px; border: 1px solid var(--border-light); border-radius: 8px; background: var(--surface2); }
+.expense-summary-grid h3, .expense-list h3, .expense-form h3 { margin-bottom: 12px; font: 700 17px 'Space Grotesk', sans-serif; }
+.expense-summary-grid section > p { display: flex; justify-content: space-between; gap: 12px; margin: 10px 0 0; font-size: 13px; }
+.expense-summary-grid section > p span { min-width: 0; overflow-wrap: anywhere; }
+.expense-summary-grid strong { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.expense-summary-grid small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+.expense-summary-grid .is-negative { color: #a3263d; }
+.expense-workspace { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(270px, .85fr); gap: 26px; align-items: start; }
+.expense-list, .expense-form { min-width: 0; }
+.expense-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; padding: 14px 0; border-top: 1px solid var(--border-light); }
+.expense-row-main { display: grid; gap: 4px; min-width: 0; }
+.expense-row-main > span, .expense-row-main small { color: var(--muted); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.expense-row-amount { font-variant-numeric: tabular-nums; }
+.expense-actions { grid-column: 1 / -1; display: flex; gap: 8px; }
+.expense-actions button { padding: 4px 0; border: 0; color: var(--primary); background: none; font: 700 12px 'DM Sans', sans-serif; cursor: pointer; }
+.expense-actions button:last-child { color: #a3263d; }
+.expense-form { display: grid; gap: 13px; padding: 19px; border: 1px solid var(--border-light); border-radius: 8px; background: var(--surface2); }
+.expense-form > label, .expense-form-row > label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; }
+.expense-form input:not([type='checkbox']):not([type='radio']), .expense-form select { width: 100%; min-width: 0; min-height: 40px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; color: var(--ink); background: white; font: 13px 'DM Sans', sans-serif; }
+.expense-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.expense-form fieldset { display: grid; gap: 9px; min-width: 0; margin: 0; padding: 10px; border: 1px solid var(--border); border-radius: 6px; }
+.expense-form legend { padding: 0 5px; font-size: 12px; font-weight: 700; }
+.expense-split-options { display: flex; gap: 18px; }
+.expense-split-options label, .expense-participant span { display: flex; align-items: center; gap: 7px; }
+.expense-split-options label { font-size: 12px; }
+.expense-participant { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; }
+.expense-participant > input { max-width: 105px; }
+.expense-form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.expense-form-actions .button { min-height: 40px; }
+@media (max-width: 850px) { .expense-summary-grid { grid-template-columns: 1fr; }.expense-workspace { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .expense-manager { padding: 18px; }.expense-heading { align-items: start; flex-direction: column; }.expense-total { text-align: left; }.expense-form-row { grid-template-columns: 1fr; } }

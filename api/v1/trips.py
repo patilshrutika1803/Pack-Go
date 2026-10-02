@@ -115,7 +115,7 @@ def regenerate_trip_day(
 @router.delete("/trips/{trip_id}", response_model=DeleteTripResponse)
 def delete_trip(trip_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> DeleteTripResponse:
     try:
-        TripAccessService(db).require_owner(trip_id, user.id)
+        TripAccessService(db).require_can_delete_trip(trip_id, user.id)
     except AccessDenied:
         _raise_trip_not_found()
     trip_service = TripService(db)

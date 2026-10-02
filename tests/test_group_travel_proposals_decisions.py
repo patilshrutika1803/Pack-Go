@@ -17,7 +17,7 @@ def proposal_db(tmp_path):
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine, expire_on_commit=False)
     owner = User(id=str(uuid4()), name="Owner", email=f"owner-{uuid4()}@example.com", password_hash="hash")
-    trip = Trip(id=str(uuid4()), user_id=owner.id, title="Shared", destination="Kyoto", duration=2, total_budget=500, itinerary=[{"day_number": 1, "hotel": "Old hotel", "meals": ["Old lunch"], "activities": ["Old activity", "Keep me"]}, {"day_number": 2, "activities": ["Day two"]}], revision_history=[], data_freshness=[])
+    trip = Trip(id=str(uuid4()), user_id=owner.id, is_group=True, title="Shared", destination="Kyoto", duration=2, total_budget=500, itinerary=[{"day_number": 1, "hotel": "Old hotel", "meals": ["Old lunch"], "activities": ["Old activity", "Keep me"]}, {"day_number": 2, "activities": ["Day two"]}], revision_history=[], data_freshness=[])
     with Session() as db:
         db.add_all([owner, trip, TripMember(id=str(uuid4()), trip_id=trip.id, user_id=owner.id, role="owner", status="active")])
         db.commit()
@@ -127,4 +127,6 @@ def test_destination_replanning_success_and_failure_preserve_decision(proposal_d
         decision.applied_action = {"applied": True, "replanning": "required"}
         monkeypatch.setattr("services.trip_service.TripService.regenerate_day", lambda self, trip_id, day_number: (_ for _ in ()).throw(RuntimeError("planner down")))
         with pytest.raises(RuntimeError): ProposalService(db).replan_destination(decision.id, owner_id)
-        assert db.get(Decision, decision.id).applied_action["replanning"] == "failed"
+        failed = db.get(Decision, decision.id).applied_action
+        assert failed["replanning"] == "failed"
+        assert failed["replanning_error"] == "Itinerary replanning failed."
