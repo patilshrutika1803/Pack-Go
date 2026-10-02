@@ -16,36 +16,42 @@ export function GroupProposals({ proposals, results, createProposal, vote, remov
 		createProposal({ proposal_type: type, title: form.title, payload })
 		setForm({ ...form, title: '', value: '' })
 	}
-	return <section className="panel">
-		<h2>Proposals</h2>
-		{proposals.length === 0 && <p>No proposals yet.</p>}
+	return <section className="panel group-proposals">
+		<header className="group-section-heading"><div><p className="eyebrow">Decide together</p><h2>Proposals</h2><p>Share an idea, cast your vote, and see where the group stands.</p></div></header>
+		{proposals.length === 0 && <p className="empty-state">No proposals yet. Create the first one to get the group’s input.</p>}
 		{proposals.map(proposal => {
 			const result = results[proposal.id]
 			const tied = result?.ties?.length > 1
-			return <article key={proposal.id}>
-				<h3>{proposal.title}</h3>
-				<p>{proposal.description || 'Open for votes'} · {proposal.status}{proposal.deadline && ` · closes ${new Date(proposal.deadline).toLocaleString()}`}</p>
-				{result && <p>Results: {Object.entries(result.counts).map(([choice, count]) => `${choice}: ${count}`).join(', ') || 'No votes'}{tied ? ` · tie: ${result.ties.join(', ')}` : result.winner ? ` · winner: ${result.winner}` : ''} · your vote: {result.user_vote || 'none'}</p>}
+			return <article className="proposal-card" key={proposal.id}>
+				<div className="proposal-heading"><div><h3>{proposal.title}</h3><p>{proposal.description || 'Open for votes'}</p></div><span className={`status-pill status-${proposal.status}`}>{proposal.status}</span></div>
+				{proposal.deadline && <p className="proposal-deadline">Voting closes {new Date(proposal.deadline).toLocaleString()}</p>}
+				{result && <div className="proposal-results" aria-label={`Results for ${proposal.title}`}>
+					<div className="proposal-result-heading"><strong>Current results</strong><span className="proposal-your-vote">Your vote: <b>{result.user_vote || 'Not voted'}</b></span></div>
+					{Object.entries(result.counts).length ? <div className="proposal-choice-list">{Object.entries(result.counts).map(([choice, count]) => <div className={`proposal-choice${result.user_vote === choice ? ' is-your-vote' : ''}${result.winner === choice ? ' is-winner' : ''}`} key={choice}><span>{choice}{result.user_vote === choice && <small>Your vote</small>}</span><strong>{count} {count === 1 ? 'vote' : 'votes'}</strong></div>)}</div> : <p className="proposal-no-votes">No votes yet.</p>}
+					{tied && <p className="proposal-outcome">Tie between {result.ties.join(', ')}</p>}
+					{!tied && result.winner && <p className="proposal-outcome">Leading choice: {result.winner}</p>}
+				</div>}
 				{proposal.status === 'open' && <>
-					<form onSubmit={event => {
+					<form className="proposal-vote-form" onSubmit={event => {
 						event.preventDefault()
 						const voteForm = event.currentTarget
 						const choice = voteForm.elements.choice.value.trim()
 						if (choice) vote(proposal.id, choice).then(() => voteForm.reset())
 					}}>
-						<input name="choice" aria-label={`Vote for ${proposal.title}`} placeholder="Your choice" required />
+						<input name="choice" aria-label={`Vote for ${proposal.title}`} placeholder="Enter your choice" required />
 						<button className="button button-primary" type="submit">Submit vote</button>
 					</form>
-					<button className="button button-quiet" onClick={() => removeVote(proposal.id)}>Remove my vote</button>
+					<button className="button button-quiet proposal-remove-vote" onClick={() => removeVote(proposal.id)}>Remove my vote</button>
 				</>}
-				{canManage && proposal.status === 'open' && <>
+				{canManage && proposal.status === 'open' && <div className="proposal-manage-actions">
 					<button className="button button-quiet" onClick={() => close(proposal.id)}>Close</button>
 					<button className="button button-quiet" onClick={() => updateProposal(proposal)}>Edit</button>
 					<button className="button button-primary" onClick={() => finalize(proposal.id)}>Finalize</button>
-				</>}
+				</div>}
 			</article>
 		})}
-		<form onSubmit={submit}>
+		<form className="proposal-create-form" onSubmit={submit}>
+			<div><p className="eyebrow">New idea</p><h3>Create a proposal</h3><p>Put an option to the group for a quick vote.</p></div>
 			<select value={type} onChange={event => setType(event.target.value)}><option value="destination">Destination</option><option value="hotel">Hotel</option><option value="restaurant">Restaurant</option><option value="activity">Activity</option><option value="itinerary_item">Itinerary item</option><option value="other">Other</option></select>
 			<input name="title" value={form.title} onChange={updateForm} placeholder="Proposal title" required />
 			{type === 'destination' && <input name="destination" value={form.destination} onChange={updateForm} placeholder="Destination" required />}
