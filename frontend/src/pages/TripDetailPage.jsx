@@ -14,6 +14,7 @@ import { GroupOverview } from '../components/group/GroupOverview'
 import { GroupProposals } from '../components/group/GroupProposals'
 import TripUtilities from '../components/TripUtilities'
 import TripJournal from '../components/TripJournal'
+import './TripDetailPage.css'
 
 const TRIP_TABS = ['overview', 'journal', 'utilities']
 const GROUP_TABS = [...TRIP_TABS, 'expenses', 'members', 'proposals', 'decisions', 'checklist', 'chat', 'notifications']
