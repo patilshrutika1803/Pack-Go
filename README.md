@@ -99,8 +99,12 @@ Create a `.env` file in the root directory:
 | `TAVILY_API_KEY` | For web and place research. |
 | `OPENWEATHERMAP_API_KEY` | For real-time weather data. |
 | `EXCHANGE_RATE_API_KEY` | API Ninjas key for currency conversion. |
+| `PACK_GO_JWT_SECRET` | At least 32 random characters used to sign access and refresh tokens. |
+| `PACK_GO_ENV` | Set to `production` to suppress development-only verification and reset tokens; defaults to development. |
 
 ## 8. API Flow
+
+Authenticated trip endpoints are scoped to the current user. A trip owned by another user returns `404 Not Found` rather than `403`, consistently for reads, updates, deletion, and day regeneration, so resource existence is not disclosed.
 
 1. The user inputs a query via the React UI.
 2. The UI sends a POST request to the FastAPI backend, initiating a streaming SSE connection.

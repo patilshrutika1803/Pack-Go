@@ -9,7 +9,7 @@ from utils.weather_info import WeatherForecastTool
 def test_current_weather_requests_metric_and_formats_celsius(monkeypatch):
     captured = {}
 
-    def mock_get(url, params):
+    def mock_get(url, params, timeout):
         captured.update(url=url, params=params)
         return SimpleNamespace(status_code=200, json=lambda: {
             "main": {"temp": 24.5},
@@ -32,7 +32,7 @@ def test_current_weather_requests_metric_and_formats_celsius(monkeypatch):
 def test_forecast_requests_metric(monkeypatch):
     captured = {}
 
-    def mock_get(url, params):
+    def mock_get(url, params, timeout):
         captured.update(url=url, params=params)
         return SimpleNamespace(status_code=200, json=lambda: {"list": [{
             "dt_txt": "2026-09-08 12:00:00",
@@ -51,7 +51,7 @@ def test_forecast_requests_metric(monkeypatch):
 
 
 def test_weather_tool_returns_structured_weather_info(monkeypatch):
-    def mock_get(url, params):
+    def mock_get(url, params, timeout):
         return SimpleNamespace(status_code=200, json=lambda: {
             "main": {"temp": 24.5},
             "weather": [{"description": "clear sky"}],
@@ -71,7 +71,7 @@ def test_weather_tool_returns_structured_weather_info(monkeypatch):
 
 
 def test_weather_tool_preserves_provider_failure_without_fabricating_values(monkeypatch):
-    def mock_get(url, params):
+    def mock_get(url, params, timeout):
         return SimpleNamespace(status_code=503, json=lambda: {"main": {"temp": 999}})
 
     monkeypatch.setattr("utils.weather_info.requests.get", mock_get)

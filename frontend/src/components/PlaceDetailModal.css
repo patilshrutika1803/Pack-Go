@@ -10,6 +10,11 @@
   backdrop-filter: blur(5px);
 }
 
+.place-modal { padding: 0 26px 26px; border: 2px solid var(--ink); background: var(--surface); box-shadow: 7px 7px 0 var(--ink); }
+.place-modal-photo { height: 170px; margin: 0 -26px 24px; display: flex; align-items: end; padding: 16px; color: #fff; background: linear-gradient(0deg, rgba(20,20,20,.7), transparent), url('https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=900&q=85') center/cover; }
+.place-modal-photo span { font: 700 10px 'Space Grotesk'; letter-spacing: .12em; }
+.place-modal-actions { display: flex; gap: 10px; margin-top: 22px; }.place-modal-actions .button, .place-modal-actions .outline-button { flex: 1; }
+
 .place-modal {
   width: min(100%, 520px);
   max-height: min(640px, 90vh);

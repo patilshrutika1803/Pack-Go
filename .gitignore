@@ -71,8 +71,20 @@ htmlcov/
 .streamlit/secrets.toml
 
 # ----------------------------
+# SQLite / local database runtime artifacts
+# ----------------------------
+pack_go.db
+*.db
+*.sqlite3
+
+# ----------------------------
 # LangGraph / AI (optional)
 # Uncomment if generated automatically
 # ----------------------------
 chroma_db/
 # memory/
+# Reference implementations
+reference/
+# Local RAG runtime storage
+knowledge_storage/
+test-data/

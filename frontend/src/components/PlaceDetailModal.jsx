@@ -34,7 +34,7 @@ export default function PlaceDetailModal({ place, timing, onClose }) {
         aria-modal="true"
         aria-labelledby="place-modal-title"
       >
-        <div className="place-modal-header">
+        <div className="place-modal-photo" aria-hidden="true"><span>PACK &amp; GO / PLACE GUIDE</span></div><div className="place-modal-header">
           <div>
             <p className="place-modal-eyebrow">Place details</p>
             <h2 id="place-modal-title">{place?.name}</h2>
@@ -59,6 +59,7 @@ export default function PlaceDetailModal({ place, timing, onClose }) {
           {duration && <Detail label="Recommended time" value={`${place.recommended_duration_hours} hours`} />}
           {bestTime && <Detail label="Best time to visit" value={place.best_time_to_visit} />}
         </div>
+        <div className="place-modal-actions"><button className="outline-button" type="button">Open map</button><button className="button button-primary" type="button">Add to itinerary</button></div>
       </section>
     </div>
   )

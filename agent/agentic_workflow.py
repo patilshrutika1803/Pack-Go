@@ -47,8 +47,13 @@ class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
     query: str                                            # extracted by Supervisor
     intent: str
+    knowledge_requested: bool
+    knowledge_answer: Optional[Any]
+    knowledge_documents: List[Any]
+    knowledge_retrieval: Optional[Any]
     chat_response: Optional[str]
     past_context: str
+    saved_preferences_context: Optional[Dict[str, Any]]
     preferences: Optional[UserPreferences]
     research_data: Optional[Dict[str, Any]]
     weather_info: Optional[WeatherInfo]

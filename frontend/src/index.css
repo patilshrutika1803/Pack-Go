@@ -1,29 +1,32 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 
 /* ── Design Tokens ─────────────────────────────────────────────── */
 :root {
-  --bg:            #080c14;
-  --bg2:           #0d1220;
-  --surface:       #111827;
-  --surface2:      #1a2235;
-  --border:        rgba(108, 99, 255, 0.18);
-  --border-light:  rgba(255,255,255,0.06);
-  --primary:       #6c63ff;
-  --primary-glow:  rgba(108, 99, 255, 0.35);
-  --accent:        #00d4aa;
-  --accent-glow:   rgba(0, 212, 170, 0.3);
-  --danger:        #ff5e7a;
-  --warn:          #f5a623;
-  --text:          #e8eaf0;
-  --text-muted:    #8b92a9;
-  --text-dim:      #4a5168;
-  --radius:        14px;
-  --radius-lg:     20px;
+  --bg:            #f6f0e4;
+  --surface:       #fffaf1;
+  --surface-strong: #ffffff;
+  --ink:           #141414;
+  --muted:         #665f55;
+  --line:          #141414;
+  --primary:       #3d5cff;
+  --pink:          #f53c8f;
+  --yellow:        #ffc93c;
+  --teal:          #2fbf9f;
+  --danger:        #c8314d;
+  --text:          var(--ink);
+  --text-muted:    var(--muted);
+  --text-dim:      #9a9185;
+  --surface2:      #eee5d5;
+  --border:        rgba(20,20,20,.2);
+  --border-light:  rgba(20,20,20,.12);
+  --accent:        var(--teal);
+  --primary-glow:  rgba(61,92,255,.2);
+  --gradient:      linear-gradient(100deg, var(--primary), var(--pink));
+  --radius:        18px;
+  --radius-lg:     30px;
   --radius-full:   999px;
-  --shadow:        0 8px 32px rgba(0,0,0,0.45);
-  --shadow-glow:   0 0 40px rgba(108,99,255,0.15);
-  --gradient:      linear-gradient(135deg, #6c63ff 0%, #00d4aa 100%);
-  --gradient-warm: linear-gradient(135deg, #ff6b6b 0%, #f5a623 100%);
+  --shadow:        7px 7px 0 var(--ink);
+  --shadow-soft:   0 18px 40px rgba(20,20,20,.10);
 }
 
 /* ── Reset ─────────────────────────────────────────────────────── */
@@ -32,9 +35,9 @@
 html { scroll-behavior: smooth; }
 
 body {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'DM Sans', sans-serif;
   background: var(--bg);
-  color: var(--text);
+  color: var(--ink);
   min-height: 100vh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
@@ -45,9 +48,8 @@ body::before {
   content: '';
   position: fixed;
   inset: 0;
-  background:
-    radial-gradient(ellipse 80% 50% at 20% 10%, rgba(108,99,255,0.12) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(0,212,170,0.08) 0%, transparent 60%);
+  background: radial-gradient(circle at 84% 7%, rgba(245,60,143,.12), transparent 22%),
+    radial-gradient(circle at 8% 80%, rgba(47,191,159,.10), transparent 24%);
   pointer-events: none;
   z-index: 0;
 }
@@ -62,17 +64,11 @@ body::before {
 h1, h2, h3 { font-family: 'Space Grotesk', sans-serif; }
 
 /* ── Glass Card ────────────────────────────────────────────────── */
-.glass {
-  background: rgba(17, 24, 39, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
-}
+.glass { background: var(--surface); border: 2px solid var(--line); border-radius: var(--radius); }
 
 /* ── Gradient Text ─────────────────────────────────────────────── */
 .gradient-text {
-  background: var(--gradient);
+  background: linear-gradient(100deg, var(--primary), var(--pink));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

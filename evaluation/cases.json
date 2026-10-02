@@ -1,0 +1,22 @@
+[
+  {"question": "What are the best beaches in North Goa?", "expected_topic": "beaches", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["north goa", "beach"], "destination": "Goa", "category": "travel_guide"},
+  {"question": "Which beaches are suitable for a relaxed day in Goa?", "expected_topic": "beaches", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["beach", "goa"], "destination": "Goa", "category": "travel_guide"},
+  {"question": "What should I see in Central Goa?", "expected_topic": "attractions", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["central goa"], "destination": "Goa", "category": "travel_guide"},
+  {"question": "Tell me about Panaji attractions.", "expected_topic": "attractions", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["panaji", "panjim"], "destination": "Goa", "category": "travel_guide"},
+  {"question": "What can I visit in Old Goa?", "expected_topic": "attractions", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["old goa"], "destination": "Goa", "category": "travel_guide"},
+  {"question": "How can I reach Goa by air?", "expected_topic": "transport", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["air", "airport"], "destination": "Goa", "category": "travel_guide"},
+  {"question": "Can I travel to Goa by train?", "expected_topic": "transport", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["train", "rail"], "destination": "Goa", "category": "travel_guide"},
+  {"question": "How can I reach Goa by road?", "expected_topic": "transport", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["road", "bus"], "destination": "Goa", "category": "travel_guide"},
+  {"question": "What is the best time to visit Goa?", "expected_topic": "seasons", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["season", "winter"], "destination": "Goa", "category": "travel_guide"},
+  {"question": "What is Goa like during monsoon?", "expected_topic": "seasons", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["monsoon", "rain"], "destination": "Goa", "category": "travel_guide"},
+  {"question": "Which months are good for a Goa holiday?", "expected_topic": "seasons", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["october", "march"], "destination": "Goa", "category": "travel_guide"},
+  {"question": "What activities can I do in Goa?", "expected_topic": "activities", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["activities", "water"], "destination": "Goa", "category": "travel_guide"},
+  {"question": "Where can I enjoy water activities in Goa?", "expected_topic": "activities", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["water", "beach"], "destination": "Goa", "category": "travel_guide"},
+  {"question": "What food experiences should I try in Goa?", "expected_topic": "food", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["food", "goan"], "destination": "Goa", "category": "travel_guide"},
+  {"question": "What local culture should visitors know in Goa?", "expected_topic": "culture", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["culture", "goa"], "destination": "Goa", "category": "travel_guide"},
+  {"question": "What travel guidance is useful before visiting Goa?", "expected_topic": "guidance", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["travel", "goa"], "destination": "Goa", "category": "travel_guide"},
+  {"question": "Which areas are in North Goa?", "expected_topic": "destination", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["north goa"], "destination": "Goa", "category": "travel_guide"},
+  {"question": "Which areas are in South Goa?", "expected_topic": "destination", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["south goa"], "destination": "Goa", "category": "travel_guide"},
+  {"question": "What should I know about travelling to Goa?", "expected_topic": "planning", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["goa", "travel"], "destination": "Goa", "category": "travel_guide"},
+  {"question": "How should I plan a short Goa visit?", "expected_topic": "planning", "expected_source": "Goa-Travel-Guide.pdf", "expected_keywords": ["goa", "visit"], "destination": "Goa", "category": "travel_guide"}
+]

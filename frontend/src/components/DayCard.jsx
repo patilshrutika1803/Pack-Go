@@ -10,7 +10,7 @@ const DAY_THEMES = [
   'linear-gradient(135deg, #f5a62320, #ff6b6b10)',
 ]
 
-export default function DayCard({ day, index, currency }) {
+export default function DayCard({ day, index, currency, onRegenerate }) {
   const [open, setOpen] = useState(true)
   const [selectedPlace, setSelectedPlace] = useState(null)
 
@@ -69,25 +69,28 @@ export default function DayCard({ day, index, currency }) {
       style={{ animationDelay: `${index * 0.12}s`, background: DAY_THEMES[index % DAY_THEMES.length] }}
     >
       {/* Day header — always visible */}
-      <button className="day-header" onClick={() => setOpen(o => !o)}>
-        <div className="day-number-badge">Day {day_number}</div>
-        <div className="day-header-center">
-          <h3 className="day-theme">{theme}</h3>
-          <div className="day-tags">
-            {activities.slice(0, 3).map(a => (
-              <span key={a} className="day-tag">{a}</span>
-            ))}
+      <div className="day-header">
+        <button type="button" className="day-header-toggle" onClick={() => setOpen(o => !o)}>
+          <div className="day-number-badge">Day {day_number}</div>
+          <div className="day-header-center">
+            <h3 className="day-theme">{theme}</h3>
+            <div className="day-tags">
+              {activities.slice(0, 3).map(a => (
+                <span key={a} className="day-tag">{a}</span>
+              ))}
+            </div>
           </div>
-        </div>
-        <div className="day-header-right">
-          <span className="day-cost">{formatCurrency(calculatedTotal, currency)}</span>
-          <span className={`chevron ${open ? 'open' : ''}`}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </span>
-        </div>
-      </button>
+          <div className="day-header-right">
+            <span className="day-cost">{formatCurrency(calculatedTotal, currency)}</span>
+            <span className={`chevron ${open ? 'open' : ''}`}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </span>
+          </div>
+        </button>
+        {onRegenerate && <button type="button" className="text-button" onClick={() => onRegenerate(day_number)}>Regenerate</button>}
+      </div>
 
       {/* Collapsible body */}
       {open && (

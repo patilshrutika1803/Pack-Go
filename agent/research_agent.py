@@ -10,6 +10,7 @@ from models.schemas import Place, Restaurant
 from pydantic import BaseModel, Field
 from tools.place_search_tool import PlaceSearchTool
 from logger.logging import get_logger
+from agent.knowledge_agent import knowledge_agent_node
 
 logger = get_logger(__name__)
 
@@ -17,6 +18,7 @@ class ResearchOutput(BaseModel):
     """Structured output containing lists of places and restaurants."""
     places: List[Place] = Field(description="List of top attractions and places to visit.")
     restaurants: List[Restaurant] = Field(description="List of highly rated restaurants.")
+    activities: List[str] = Field(description="List of activities to do in the destination.", default_factory=list)
 
 def research_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -52,13 +54,27 @@ def research_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         final_response = invoke_with_fallback(build_chain, messages)
         logger.info(f"Research completed. Found {len(final_response.places)} places and {len(final_response.restaurants)} restaurants.")
         
-        return {
+        result = {
             "research_data": {
                 "places": [p.model_dump() for p in final_response.places],
-                "restaurants": [r.model_dump() for r in final_response.restaurants]
+                "restaurants": [r.model_dump() for r in final_response.restaurants],
+                "activities": list(final_response.activities),
             },
             "completed_agents": ["ResearchAgent"]
         }
+        if state.get("knowledge_requested"):
+            knowledge_result = knowledge_agent_node(state)
+            grounded_answer = knowledge_result.get("knowledge_answer")
+            if grounded_answer is not None:
+                result["research_data"]["grounded_knowledge"] = grounded_answer.answer
+                result["research_data"]["knowledge_sources"] = [
+                    source.model_dump() for source in grounded_answer.sources
+                ]
+                result["completed_agents"].extend(
+                    agent for agent in knowledge_result.get("completed_agents", [])
+                    if agent not in result["completed_agents"]
+                )
+        return result
     except Exception as e:
         logger.error(f"ResearchAgent failed: {e}")
         # Mark as failed so the supervisor never routes here again

@@ -115,3 +115,32 @@
   max-width: 420px;
   line-height: 1.6;
 }
+
+.map-itinerary-stops {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.map-itinerary-stops li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.map-itinerary-stops li span,
+.map-note,
+.map-empty-state {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.map-itinerary-stops a {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}

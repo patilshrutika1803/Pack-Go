@@ -1,3 +1,4 @@
+import pytest
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 
@@ -5,6 +6,7 @@ from agent import agentic_workflow as workflow_module
 from agent import supervisor as supervisor_module
 from models.schemas import SupervisorDecision
 from models.schemas import UserPreferences
+from agent import preference_extractor as preference_extractor_module
 
 
 def _run_graph(monkeypatch, intent, query="Tell me something interesting about Rajasthan"):
@@ -99,6 +101,87 @@ def test_supervisor_uses_structured_intent_decision(monkeypatch):
     assert state["query"] == "What is the best time to visit Goa?"
 
 
+@pytest.mark.parametrize(
+    ("query", "expected_intent"),
+    [
+        ("Weekend in Goa", "plan_trip"),
+        ("Plan a trip to Goa", "plan_trip"),
+        ("3 days in Manali", "plan_trip"),
+        ("Plan a honeymoon in Bali", "plan_trip"),
+        ("I want to visit Jaipur", "plan_trip"),
+        ("Hello", "general_chat"),
+        ("What can you do?", "general_chat"),
+        ("How does PACK & GO work?", "general_chat"),
+    ],
+)
+def test_supervisor_classifies_travel_intent_examples_with_mocked_provider(
+    monkeypatch, query, expected_intent
+):
+    decisions = {
+        "Weekend in Goa": "plan_trip",
+        "Plan a trip to Goa": "plan_trip",
+        "3 days in Manali": "plan_trip",
+        "Plan a honeymoon in Bali": "plan_trip",
+        "I want to visit Jaipur": "plan_trip",
+        "Hello": "general_chat",
+        "What can you do?": "general_chat",
+        "How does PACK & GO work?": "general_chat",
+    }
+
+    def mocked_provider(_chain_builder, messages):
+        assert messages[0].content == supervisor_module.SYSTEM_PROMPT
+        return SupervisorDecision(intent=decisions[messages[1].content])
+
+    monkeypatch.setattr(supervisor_module, "invoke_with_fallback", mocked_provider)
+
+    state = supervisor_module.supervisor_node({"messages": [HumanMessage(content=query)]})
+
+    assert state["intent"] == expected_intent
+
+
+def test_weekend_request_uses_planning_workflow_with_mocked_provider(monkeypatch):
+    calls = []
+
+    def mocked_provider(_chain_builder, messages):
+        assert messages[1].content == "Weekend in Goa"
+        return SupervisorDecision(intent="plan_trip")
+
+    def preferences(state):
+        calls.append("PreferenceExtractor")
+        return {"preferences": UserPreferences(
+            destination="Goa",
+            duration=2,
+            total_budget=30000,
+            budget_currency="INR",
+            travel_style="balanced",
+        )}
+
+    def research(state):
+        calls.append("ResearchAgent")
+        return {"research_data": {}}
+
+    def weather(state):
+        calls.append("WeatherAgent")
+        return {"weather_info": None}
+
+    monkeypatch.setattr(supervisor_module, "invoke_with_fallback", mocked_provider)
+    monkeypatch.setattr(workflow_module, "supervisor_node", supervisor_module.supervisor_node)
+    monkeypatch.setattr(workflow_module, "chat_agent_node", lambda state: calls.append("ChatAgent"))
+    monkeypatch.setattr(workflow_module, "preference_extractor_node", preferences)
+    monkeypatch.setattr(workflow_module, "research_agent_node", research)
+    monkeypatch.setattr(workflow_module, "weather_agent_node", weather)
+    monkeypatch.setattr(workflow_module, "get_checkpointer", MemorySaver)
+
+    graph = workflow_module.GraphBuilder().build_graph()
+    graph.invoke(
+        {"messages": [HumanMessage(content="Weekend in Goa")]},
+        config={"configurable": {"thread_id": "routing-weekend-goa"}},
+    )
+
+    assert calls == ["PreferenceExtractor", "ResearchAgent", "WeatherAgent"]
+    assert "ChatAgent" not in calls
+
+
 def test_general_chat_routes_only_to_chat_agent(monkeypatch):
     state, calls = _run_graph(monkeypatch, "general_chat")
 
@@ -114,3 +197,39 @@ def test_general_travel_question_uses_general_chat_route(monkeypatch):
     assert state["query"] == "What is the best time to visit Goa?"
     assert calls[-1] == "ChatAgent"
     assert "PreferenceExtractor" not in calls
+
+
+def test_preference_extractor_receives_saved_preferences_without_provider_call(monkeypatch):
+    captured = {}
+
+    class Memory:
+        def retrieve_past_trips(self, query):
+            return "No previous context found."
+
+    def mocked_provider(_chain_builder, messages):
+        captured["system"] = messages[0].content
+        captured["query"] = messages[1].content
+        return UserPreferences(
+            destination="Goa",
+            duration=3,
+            total_budget=20000,
+            budget_currency="INR",
+            travel_style="Relaxation",
+            interests=["Beach", "Food"],
+        )
+
+    monkeypatch.setattr(preference_extractor_module, "LongTermMemory", Memory)
+    monkeypatch.setattr(preference_extractor_module, "invoke_with_fallback", mocked_provider)
+    result = preference_extractor_module.preference_extractor_node({
+        "query": "3 days in Goa",
+        "saved_preferences_context": {
+            "travel_style": "Relaxation",
+            "hotel_preference": "Budget",
+            "food_preference": "Local",
+        },
+    })
+
+    assert result["preferences"].travel_style == "Relaxation"
+    assert captured["query"] == "3 days in Goa"
+    assert "hotel_preference" in captured["system"]
+    assert "explicit instructions in the current query always take priority" in captured["system"]

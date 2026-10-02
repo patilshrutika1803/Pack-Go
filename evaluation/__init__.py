@@ -1,0 +1,1 @@
+"""Offline evaluation utilities for PACK & GO RAG quality."""

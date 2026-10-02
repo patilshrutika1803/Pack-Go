@@ -5,3 +5,9 @@ llm:
   gemini:
     provider: "google_genai"
     model_name: "gemini-3.5-flash"
+
+rag:
+  collection_name: "travel_knowledge"
+  chunk_size: 500
+  chunk_overlap: 60
+  embedding_model: "sentence-transformers/all-MiniLM-L6-v2"

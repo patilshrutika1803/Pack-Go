@@ -8,6 +8,7 @@ Output strict JSON matching UserPreferences schema:
 
 Rules:
 - Infer missing fields from context.
+- Treat saved user preferences as defaults only; explicit instructions in the current query always take priority.
 - is_domestic=true only if destination is within India.
 - Return valid JSON only.
 """

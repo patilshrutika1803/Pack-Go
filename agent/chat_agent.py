@@ -7,6 +7,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.output_parsers import StrOutputParser
 from utils.llm_loader import invoke_with_fallback
 from logger.logging import get_logger
+from agent.knowledge_agent import is_knowledge_query, knowledge_agent_node
 
 logger = get_logger(__name__)
 
@@ -18,8 +19,20 @@ Answer their questions clearly and concisely. If they ask about something in the
 def chat_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """Handles general chat questions and sets the chat_response state."""
     logger.info("ChatAgent started.")
-    
+
     query = state.get("query", "")
+
+    if is_knowledge_query(query):
+        knowledge_result = knowledge_agent_node(state)
+        grounded_answer = knowledge_result.get("knowledge_answer")
+        if grounded_answer is not None:
+            return {
+                "chat_response": grounded_answer.answer,
+                "knowledge_answer": grounded_answer,
+                "knowledge_documents": knowledge_result.get("knowledge_documents", []),
+                "completed_agents": ["ChatAgent", "KnowledgeAgent"],
+            }
+
     
     # Provide basic context from the current state so the LLM knows what we are talking about
     context = []

@@ -21,7 +21,12 @@ class FakeGroq:
         if schema is research_module.ResearchOutput:
             return research_module.ResearchOutput(places=[], restaurants=[])
         if schema is itinerary_module.ItineraryOutput:
-            return itinerary_module.ItineraryOutput(itinerary=[])
+            return itinerary_module.ItineraryOutput(
+                itinerary=[
+                    {"day_number": day_number, "theme": f"Day {day_number}"}
+                    for day_number in range(1, 4)
+                ]
+            )
         raise AssertionError(f"Unexpected schema: {schema}")
 
     def bind_tools(self, tools):
@@ -100,4 +105,85 @@ def test_itinerary_agent_uses_provider_aware_structured_output(monkeypatch):
     })
 
     assert response["completed_agents"] == ["ItineraryAgent"]
+    assert len(response["itinerary"]) == 3
     assert called == [itinerary_module.ItineraryOutput]
+
+
+def test_itinerary_output_normalizes_omitted_final_day_fields_without_relaxing_day_schema():
+    output = itinerary_module.ItineraryOutput.model_validate({
+        "itinerary": [
+            {
+                "day_number": 4,
+                "theme": "Departure & Relax",
+                "hotel": {"name": "Inn", "stars": 3, "price_per_night": 1000, "description": "Central"},
+                "meals": [],
+            }
+        ]
+    })
+
+    day = output.itinerary[0]
+    assert day.day_number == 4
+    assert day.attractions == []
+    assert day.activities == []
+    assert day.transport.mode == "Not specified"
+    assert day.estimated_day_cost == 0
+
+
+def test_itinerary_agent_reconciles_budget_with_generated_day_costs(monkeypatch):
+    generated_day = itinerary_module.ItineraryOutput(
+        itinerary=[
+            {
+                "day_number": 1,
+                "theme": "Highlights",
+                "hotel": {"name": "Inn", "stars": 3, "price_per_night": "₹1,200", "description": "Central"},
+                "meals": [{"meal_type": "Lunch", "restaurant_name": "Cafe", "estimated_cost": "₹350"}],
+                "attractions": [{"place": {"name": "Palace", "entry_fee": "₹100"}, "timing": "10:00 AM"}],
+                "activities": ["Heritage walk"],
+                "transport": {"mode": "Taxi", "estimated_cost": "₹250"},
+                "estimated_day_cost": 1900,
+            }
+        ]
+    )
+    monkeypatch.setattr(itinerary_module, "invoke_with_fallback", lambda chain_builder, messages: generated_day)
+
+    response = itinerary_module.itinerary_agent_node({
+        "preferences": UserPreferences(
+            destination="Udaipur", duration=1, total_budget=5000,
+            budget_currency="INR", travel_style="balanced",
+        ),
+        "budget_breakdown": {"total_estimated": 9999, "currency": "INR", "categories": []},
+        "research_data": {"places": [{"name": "Palace"}], "restaurants": []},
+    })
+
+    categories = {item.name: item.amount for item in response["budget_breakdown"].categories}
+    assert categories == {"Accommodation": 1200.0, "Food": 350.0, "Transport": 250.0, "Activities": 100.0}
+    assert response["budget_breakdown"].total_estimated == 1900.0
+
+
+def test_itinerary_agent_derives_activities_when_attractions_exist(monkeypatch):
+    generated_day = itinerary_module.ItineraryOutput(
+        itinerary=[
+            {
+                "day_number": 1,
+                "theme": "Highlights",
+                "hotel": {"name": "Inn", "stars": 3, "price_per_night": 1000, "description": "Central"},
+                "meals": [{"meal_type": "Lunch", "restaurant_name": "Cafe", "estimated_cost": 300}],
+                "attractions": [{"place": {"name": "City Palace"}, "timing": "10:00 AM"}],
+                "activities": [],
+                "transport": {"mode": "Walking", "estimated_cost": 0},
+                "estimated_day_cost": 1300,
+            }
+        ]
+    )
+    monkeypatch.setattr(itinerary_module, "invoke_with_fallback", lambda chain_builder, messages: generated_day)
+
+    response = itinerary_module.itinerary_agent_node({
+        "preferences": UserPreferences(
+            destination="Udaipur", duration=1, total_budget=5000,
+            budget_currency="INR", travel_style="balanced",
+        ),
+        "budget_breakdown": {"total_estimated": 1300, "currency": "INR", "categories": []},
+        "research_data": {"places": [{"name": "City Palace"}], "restaurants": []},
+    })
+
+    assert response["itinerary"][0]["activities"] == ["City Palace"]
