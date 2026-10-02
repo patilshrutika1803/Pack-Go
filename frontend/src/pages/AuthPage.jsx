@@ -80,8 +80,6 @@ export default function AuthPage({ mode }) {
           </form>
           {!isRegister && <>
             <div className="auth-form-meta"><span>Secure access to your trips</span><Link className="auth-link-muted" to="/forgot-password">Forgot password?</Link></div>
-            <div className="auth-divider"><span>OR</span></div>
-            <button className="button google-button" type="button" disabled><span className="google-mark">G</span> Continue with Google <small>Coming soon</small></button>
           </>}
           <p className="auth-switch">{isRegister ? 'Already have an account?' : "Don't have an account?"} <Link to={switchPath(isRegister ? '/login' : '/register')}>{isRegister ? 'Log in' : 'Create one'}</Link></p>
         </div>

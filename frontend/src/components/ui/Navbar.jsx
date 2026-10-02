@@ -9,8 +9,8 @@ export default function Navbar() {
   return (
     <header className="navbar">
       <Link to="/" className="logo" onClick={close}><span>✦</span> PACK &amp; GO</Link>
-      <button className="menu-button" aria-label="Open navigation" onClick={() => setOpen(!open)}>{open ? '×' : '☰'}</button>
-      <nav className={`nav-links ${open ? 'is-open' : ''}`}>
+      <button className="menu-button" aria-label={open ? 'Close navigation' : 'Open navigation'} aria-expanded={open} aria-controls="primary-navigation" onClick={() => setOpen(!open)}>{open ? '×' : '☰'}</button>
+      <nav id="primary-navigation" className={`nav-links ${open ? 'is-open' : ''}`} onKeyDown={(event) => { if (event.key === 'Escape') close() }}>
         <NavLink to="/explore" onClick={close}>Explore</NavLink>
         <NavLink to="/plan" onClick={close}>Plan a trip</NavLink>
         <NavLink to="/trips" onClick={close}>My trips</NavLink>

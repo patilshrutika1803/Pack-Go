@@ -63,6 +63,12 @@ body::before {
 /* ── Typography ────────────────────────────────────────────────── */
 h1, h2, h3 { font-family: 'Space Grotesk', sans-serif; }
 
+/* Keep keyboard navigation visible across shared and page-specific controls. */
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 3px solid rgba(61, 92, 255, .55);
+  outline-offset: 3px;
+}
+
 /* ── Glass Card ────────────────────────────────────────────────── */
 .glass { background: var(--surface); border: 2px solid var(--line); border-radius: var(--radius); }
 
