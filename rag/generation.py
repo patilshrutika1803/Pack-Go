@@ -84,7 +84,7 @@ def _source_for(document: RetrievedDocument) -> GroundedSource:
 
 
 def _source_key(source: GroundedSource) -> tuple:
-    return tuple(source.model_dump(exclude={"preview"}).values())
+    return source.document_id, source.page, source.chunk_index
 
 
 def _deduplicate_documents(documents: list[RetrievedDocument]) -> list[RetrievedDocument]:
@@ -100,7 +100,12 @@ def _deduplicate_documents(documents: list[RetrievedDocument]) -> list[Retrieved
 
 def _unsupported_named_entities(answer: str, context: str) -> list[str]:
     """Find capitalized answer entities that are absent from retrieved text."""
-    normalized_context = " ".join(re.findall(r"[a-z0-9]+", context.casefold()))
+    normalized_context = " ".join(
+        re.findall(
+            r"[a-z0-9]+",
+            re.sub(r"\bint[^a-z0-9]*l\b", "international", context.casefold()),
+        )
+    )
     candidates = re.findall(
         r"\b[A-Z][A-Za-z0-9]*(?:[-'][A-Za-z0-9]+)*(?:\s+[A-Z][A-Za-z0-9]*(?:[-'][A-Za-z0-9]+)*)*",
         answer,

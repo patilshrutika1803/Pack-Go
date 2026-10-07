@@ -68,6 +68,36 @@ def test_grounding_validator_accepts_title_from_retrieved_filename():
     ) == []
 
 
+def test_grounding_accepts_expanded_international_from_retrieved_intl_abbreviation(monkeypatch):
+    document = _document()
+    document.content = "Manohar Parrikar Int\u2019l Airport (GOX), Mopa."
+    monkeypatch.setattr(
+        "rag.generation.invoke_with_fallback",
+        lambda *_args, **_kwargs: {
+            "answer": "Manohar Parrikar International Airport (GOX) is at Mopa.",
+            "sources": [{
+                "document_id": document.document_id,
+                "filename": document.filename,
+                "source": document.source,
+                "page": document.page,
+                "chunk_index": document.chunk_index,
+                "destination": document.destination,
+                "category": document.category,
+                "document_type": document.document_type,
+            }],
+            "grounded": True,
+            "query": "How can I reach Goa?",
+            "retrieved_document_count": 1,
+        },
+    )
+
+    response = generate_grounded_answer("How can I reach Goa?", [document])
+
+    assert response.grounded is True
+    assert response.sources[0].page == document.page
+    assert response.sources[0].chunk_index == document.chunk_index
+
+
 def test_grounded_response_preserves_retrieved_sources(monkeypatch):
     captured = {}
 
@@ -133,6 +163,37 @@ def test_grounded_response_accepts_source_title_from_metadata(monkeypatch):
     assert response.answer.startswith("The Goa Travel Guide")
     assert response.grounded is True
     assert response.sources[0].filename == "Goa-Travel-Guide.pdf"
+
+
+def test_grounded_citation_uses_retrieved_metadata_when_source_name_is_normalized(monkeypatch):
+    document = _document()
+    document.filename = "0c5086f8-Goa-Travel-Guide.pdf"
+    document.source = document.filename
+    monkeypatch.setattr(
+        "rag.generation.invoke_with_fallback",
+        lambda *_args, **_kwargs: {
+            "answer": "Keri and Arambol are listed as North Goa beaches.",
+            "sources": [{
+                "document_id": document.document_id,
+                "filename": document.filename,
+                "source": "Goa-Travel-Guide.pdf",
+                "page": document.page,
+                "chunk_index": document.chunk_index,
+                "destination": document.destination,
+                "category": document.category,
+                "document_type": document.document_type,
+            }],
+            "grounded": True,
+            "query": "wrong query",
+            "retrieved_document_count": 0,
+        },
+    )
+
+    response = generate_grounded_answer("best beaches in North Goa", [document])
+
+    assert response.grounded is True
+    assert response.sources[0].source == document.source
+    assert response.sources[0].filename == document.filename
 
 
 def test_direct_udaipur_answer_is_grounded_with_retrieved_citation(monkeypatch):
