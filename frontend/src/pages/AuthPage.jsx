@@ -4,12 +4,13 @@ import { useAuth } from '../auth/useAuth'
 
 export default function AuthPage({ mode }) {
   const isRegister = mode === 'register'
-  const { login, register, isLoading } = useAuth()
+  const { login, register, isLoading, authError } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' })
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [loginMode, setLoginMode] = useState('user')
   const requestedNext = new URLSearchParams(location.search).get('next')
   const next = requestedNext?.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/trips'
@@ -23,10 +24,15 @@ export default function AuthPage({ mode }) {
   const submit = async (event) => {
     event.preventDefault()
     setError('')
+    setNotice('')
     if (isRegister && form.password !== form.confirmPassword) return setError('Passwords do not match.')
     if (form.password.length < 8) return setError('Use at least 8 characters for your password.')
     try {
       const result = await (isRegister ? register(form) : login({ email: form.email, password: form.password }))
+      if (result.needsEmailConfirmation) {
+        setNotice('Check your email to confirm your account before logging in.')
+        return
+      }
       if (loginMode === 'admin' && !result.user?.is_admin) {
         setError('This account does not have administrator access.')
       } else {
@@ -76,6 +82,8 @@ export default function AuthPage({ mode }) {
             <label>Password<div className="auth-password-field"><input name="password" type={showPassword ? 'text' : 'password'} value={form.password} onChange={update} autoComplete={isRegister ? 'new-password' : 'current-password'} required placeholder="At least 8 characters" /><button className="password-toggle" type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'Hide password' : 'Show password'}><span className={showPassword ? 'eye-icon is-open' : 'eye-icon'} /></button></div></label>
             {isRegister && <label>Confirm password<input name="confirmPassword" type={showPassword ? 'text' : 'password'} value={form.confirmPassword} onChange={update} autoComplete="new-password" required placeholder="Type it again" /></label>}
             {error && <p className="form-error" role="alert">{error}</p>}
+            {authError && <p className="form-error" role="alert">{authError}</p>}
+            {notice && <p role="status">{notice}</p>}
             <button className="button button-primary submit-button" disabled={isLoading}>{isLoading ? 'Loading...' : isRegister ? 'Create account →' : 'Log in →'}</button>
           </form>
           {!isRegister && <>

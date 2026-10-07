@@ -12,7 +12,7 @@ def build_packing_list(trip: Any) -> dict[str, Any]:
         "weather": [],
         "destination": [],
     }
-    weather = trip.weather if isinstance(trip.weather, dict) else {}
+    weather = trip.get("weather") if isinstance(trip.get("weather"), dict) else {}
     conditions = str(weather.get("conditions", "")).lower()
     suggestions = weather.get("packing_suggestions", [])
     if not isinstance(suggestions, list):
@@ -27,7 +27,7 @@ def build_packing_list(trip: Any) -> dict[str, Any]:
         categories["weather"].append("Umbrella or raincoat")
     if any(term in conditions for term in ("snow", "cold", "freezing")):
         categories["clothing"].append("Warm layers")
-    interests = {str(value).lower() for value in (trip.interests or []) if value}
+    interests = {str(value).lower() for value in (trip.get("interests") or []) if value}
     if interests.intersection({"beach", "swimming", "water"}):
         categories["destination"].append("Swimwear and sun protection")
     if interests.intersection({"adventure", "hiking", "nature"}):
@@ -35,14 +35,14 @@ def build_packing_list(trip: Any) -> dict[str, Any]:
     categories = {name: list(dict.fromkeys(items)) for name, items in categories.items()}
     items = list(dict.fromkeys(item for category_items in categories.values() for item in category_items))
     preparation = [
-        f"Confirm accommodation and transport for {trip.destination}",
+        f"Confirm accommodation and transport for {trip['destination']}",
         "Check travel dates, identification, and required entry documents",
         "Review the weather forecast shortly before departure",
     ]
     return {
-        "trip_id": trip.id,
-        "destination": trip.destination,
-        "travel_dates": trip.travel_dates,
+        "trip_id": trip["id"],
+        "destination": trip["destination"],
+        "travel_dates": trip.get("travel_dates"),
         "categories": categories,
         "items": list(dict.fromkeys(items)),
         "preparation": preparation,
@@ -51,8 +51,8 @@ def build_packing_list(trip: Any) -> dict[str, Any]:
 
 
 def extract_map_locations(trip: Any) -> list[dict[str, str]]:
-    locations: list[dict[str, str]] = [{"name": trip.destination, "type": "destination"}]
-    for day in trip.itinerary or []:
+    locations: list[dict[str, str]] = [{"name": trip["destination"], "type": "destination"}]
+    for day in trip.get("itinerary") or []:
         if not isinstance(day, dict):
             continue
         for attraction in day.get("attractions", []):

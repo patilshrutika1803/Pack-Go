@@ -2,10 +2,11 @@ import hashlib
 from pathlib import Path
 from uuid import uuid4
 
-from pypdf import PdfReader
-from sqlalchemy.orm import Session
+from datetime import UTC, datetime
 
-from database.models import KnowledgeSource
+from pymongo.database import Database
+from pypdf import PdfReader
+
 from logger.logging import get_logger
 from rag.chunking import PageText, chunk_pages
 from rag.config import get_rag_settings
@@ -38,7 +39,7 @@ def extract_pdf_pages(pdf_path: str | Path, document_id: str | None = None) -> l
         raise ValueError("Could not read PDF document") from exc
 
 
-def ingest_pdf(pdf_path: str | Path, destination: str, category: str, document_type: str, db: Session | None = None, persist_directory: str | None = None, embedding_model: EmbeddingProvider | None = None, display_name: str | None = None) -> dict:
+def ingest_pdf(pdf_path: str | Path, destination: str, category: str, document_type: str, db: Database | None = None, persist_directory: str | None = None, embedding_model: EmbeddingProvider | None = None, display_name: str | None = None) -> dict:
     path = Path(pdf_path)
     document_id = document_id_for_path(path)
     pages = extract_pdf_pages(path, document_id)
@@ -53,15 +54,30 @@ def ingest_pdf(pdf_path: str | Path, destination: str, category: str, document_t
     collection = get_knowledge_collection(persist_directory=persist_directory)
     replace_document_chunks(collection, document_id, texts, embeddings, metadatas, ids)
     if db is not None:
-        source = db.query(KnowledgeSource).filter_by(document_id=document_id).one_or_none()
-        if source is None:
-            source = KnowledgeSource(id=str(uuid4()), document_id=document_id, filename=path.name, display_name=display_name or path.name, destination=destination, category=category, document_type=document_type, file_path=str(path), chunk_count=len(chunks), page_count=len(pages), status="indexed")
-            db.add(source)
-        else:
-            source.filename, source.display_name, source.destination = path.name, display_name or path.name, destination
-            source.category, source.document_type, source.file_path = category, document_type, str(path)
-            source.chunk_count, source.page_count, source.status = len(chunks), len(pages), "indexed"
-        db.commit()
+        existing = db.knowledge_sources.find_one({"document_id": document_id}, {"_id": 1, "id": 1, "created_at": 1})
+        source_id = existing.get("id") if existing else str(uuid4())
+        now = datetime.now(UTC)
+        db.knowledge_sources.update_one(
+            {"document_id": document_id},
+            {
+                "$set": {
+                    "id": source_id,
+                    "document_id": document_id,
+                    "filename": path.name,
+                    "display_name": display_name or path.name,
+                    "destination": destination,
+                    "category": category,
+                    "document_type": document_type,
+                    "file_path": str(path),
+                    "chunk_count": len(chunks),
+                    "page_count": len(pages),
+                    "status": "indexed",
+                    "updated_at": now,
+                },
+                "$setOnInsert": {"_id": source_id, "created_at": now},
+            },
+            upsert=True,
+        )
     result = {"document_id": document_id, "filename": path.name, "pages": len(pages), "chunks": len(chunks), "collection": settings.collection_name, "status": "indexed"}
     logger.info("Indexed %s: %s pages, %s chunks", path.name, len(pages), len(chunks))
     return result

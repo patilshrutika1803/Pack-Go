@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 
-from api.v1.dependencies import get_current_user
-from database import User
-from database.connection import get_db
+from api.v1.dependencies import CurrentUser, get_current_user
+from database.mongodb import get_database
 from models.api_schemas import ExpenseCreateRequest, ExpenseResponse, ExpenseSummaryResponse, ExpenseUpdateRequest
 from services.collaboration_service import AccessDenied
 from services.expense_service import ExpenseService
@@ -21,7 +20,7 @@ def _raise_expense_error(exc: Exception) -> None:
 
 
 @router.post("/trips/{trip_id}/expenses", response_model=ExpenseResponse, status_code=status.HTTP_201_CREATED)
-def create_expense(trip_id: str, payload: ExpenseCreateRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def create_expense(trip_id: str, payload: ExpenseCreateRequest, db: Database = Depends(get_database), user: CurrentUser = Depends(get_current_user)):
     try:
         return ExpenseService(db).create(trip_id, user.id, payload)
     except (AccessDenied, ValueError) as exc:
@@ -29,7 +28,7 @@ def create_expense(trip_id: str, payload: ExpenseCreateRequest, db: Session = De
 
 
 @router.get("/trips/{trip_id}/expenses", response_model=list[ExpenseResponse])
-def list_expenses(trip_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def list_expenses(trip_id: str, db: Database = Depends(get_database), user: CurrentUser = Depends(get_current_user)):
     try:
         return ExpenseService(db).list_expenses(trip_id, user.id)
     except AccessDenied as exc:
@@ -37,7 +36,7 @@ def list_expenses(trip_id: str, db: Session = Depends(get_db), user: User = Depe
 
 
 @router.get("/trips/{trip_id}/expenses/summary", response_model=ExpenseSummaryResponse)
-def expense_summary(trip_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def expense_summary(trip_id: str, db: Database = Depends(get_database), user: CurrentUser = Depends(get_current_user)):
     try:
         return ExpenseService(db).summary(trip_id, user.id)
     except AccessDenied as exc:
@@ -45,7 +44,7 @@ def expense_summary(trip_id: str, db: Session = Depends(get_db), user: User = De
 
 
 @router.patch("/expenses/{expense_id}", response_model=ExpenseResponse)
-def update_expense(expense_id: str, payload: ExpenseUpdateRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def update_expense(expense_id: str, payload: ExpenseUpdateRequest, db: Database = Depends(get_database), user: CurrentUser = Depends(get_current_user)):
     try:
         return ExpenseService(db).update(expense_id, user.id, payload)
     except (AccessDenied, ValueError) as exc:
@@ -53,7 +52,7 @@ def update_expense(expense_id: str, payload: ExpenseUpdateRequest, db: Session =
 
 
 @router.delete("/expenses/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_expense(expense_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def delete_expense(expense_id: str, db: Database = Depends(get_database), user: CurrentUser = Depends(get_current_user)):
     try:
         ExpenseService(db).delete(expense_id, user.id)
     except AccessDenied as exc:

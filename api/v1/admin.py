@@ -4,14 +4,11 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, text
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
+from pymongo.database import Database
+from pymongo.errors import PyMongoError
 
-from api.v1.dependencies import get_current_admin
-from database import Expense, JournalEntry, KnowledgeSource, Trip, User
-from database.connection import get_db
-
+from api.v1.dependencies import CurrentUser, get_current_admin
+from database.mongodb import get_database
 
 router = APIRouter(prefix="/api/v1/admin", tags=["Admin"])
 
@@ -62,25 +59,31 @@ def _unavailable(reason: str) -> UnavailableMetric:
 
 
 @router.get("/overview", response_model=AdminOverview)
-def get_admin_overview(db: Session = Depends(get_db), _: User = Depends(get_current_admin)) -> AdminOverview:
+def get_admin_overview(
+    db: Database = Depends(get_database),
+    _: CurrentUser = Depends(get_current_admin),
+) -> AdminOverview:
     try:
-        db.execute(text("SELECT 1"))
-        total_users = db.scalar(select(func.count(User.id))) or 0
-        total_trips = db.scalar(select(func.count(Trip.id))) or 0
-        group_trips = db.scalar(select(func.count(Trip.id)).where(Trip.is_group.is_(True))) or 0
-        destination_rows = db.execute(
-            select(Trip.destination, func.count(Trip.id))
-            .group_by(Trip.destination)
-            .order_by(func.count(Trip.id).desc(), Trip.destination.asc())
-        ).all()
-        expense_count = db.scalar(select(func.count(Expense.id))) or 0
-        expense_total = db.scalar(select(func.sum(Expense.amount))) or Decimal("0")
-        journal_entry_count = db.scalar(select(func.count(JournalEntry.id))) or 0
-        total_sources = db.scalar(select(func.count(KnowledgeSource.id))) or 0
-        indexed_sources = db.scalar(select(func.count(KnowledgeSource.id)).where(KnowledgeSource.status == "indexed")) or 0
-        processing_sources = db.scalar(select(func.count(KnowledgeSource.id)).where(KnowledgeSource.status == "processing")) or 0
-        failed_sources = db.scalar(select(func.count(KnowledgeSource.id)).where(KnowledgeSource.status == "failed")) or 0
-    except SQLAlchemyError as exc:
+        total_users = db.users.count_documents({})
+        total_trips = db.trips.count_documents({})
+        group_trips = db.trips.count_documents({"is_group": True})
+        destination_rows = list(db.trips.aggregate([
+            {"$group": {"_id": "$destination", "trip_count": {"$sum": 1}}},
+            {"$sort": {"trip_count": -1, "_id": 1}},
+        ]))
+        expense_count = db.expenses.count_documents({})
+        expense_total = sum(
+            (item["amount"].to_decimal() if hasattr(item["amount"], "to_decimal") else Decimal(str(item["amount"]))
+             for item in db.expenses.find({}, {"amount": 1})),
+            start=Decimal("0"),
+        )
+        journal_entry_count = db.journal_entries.count_documents({})
+        source_counts = {
+            status: db.knowledge_sources.count_documents({"status": status})
+            for status in ("indexed", "processing", "failed")
+        }
+        total_sources = db.knowledge_sources.count_documents({})
+    except PyMongoError as exc:
         raise HTTPException(status_code=503, detail="Administrative status is temporarily unavailable.") from exc
 
     unavailable_reason = "No persisted activity or request telemetry is recorded by the current application."
@@ -89,7 +92,10 @@ def get_admin_overview(db: Session = Depends(get_db), _: User = Depends(get_curr
             total_users=total_users,
             total_trips=total_trips,
             group_trips=group_trips,
-            destinations=[DestinationMetric(destination=destination, trip_count=count) for destination, count in destination_rows],
+            destinations=[
+                DestinationMetric(destination=row["_id"], trip_count=row["trip_count"])
+                for row in destination_rows
+            ],
             expense_count=expense_count,
             expense_total=float(expense_total),
             journal_entry_count=journal_entry_count,
@@ -102,9 +108,9 @@ def get_admin_overview(db: Session = Depends(get_db), _: User = Depends(get_curr
             database="healthy",
             knowledge=KnowledgeStatus(
                 total_sources=total_sources,
-                indexed_sources=indexed_sources,
-                processing_sources=processing_sources,
-                failed_sources=failed_sources,
+                indexed_sources=source_counts["indexed"],
+                processing_sources=source_counts["processing"],
+                failed_sources=source_counts["failed"],
             ),
         ),
     )

@@ -6,11 +6,10 @@ from typing import Literal
 from urllib.parse import quote_plus
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 
-from api.v1.dependencies import get_current_user
-from database import User
-from database.connection import get_db
+from api.v1.dependencies import CurrentUser, get_current_user
+from database.mongodb import get_database
 from models.api_schemas import ItineraryCSPRequest, ItineraryGARequest, RouteOptimizationRequest
 from services.collaboration_service import AccessDenied, TripAccessService
 from services.route_optimization import (
@@ -94,7 +93,7 @@ def search_places(
 
 
 @router.get("/trips/{trip_id}/utilities/packing")
-def get_packing_list(trip_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def get_packing_list(trip_id: str, db: Database = Depends(get_database), user: CurrentUser = Depends(get_current_user)):
     try:
         trip = TripAccessService(db).get_trip_for_member(trip_id, user.id)
     except AccessDenied:
@@ -103,16 +102,16 @@ def get_packing_list(trip_id: str, db: Session = Depends(get_db), user: User = D
 
 
 @router.get("/trips/{trip_id}/utilities/map")
-def get_trip_map(trip_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def get_trip_map(trip_id: str, db: Database = Depends(get_database), user: CurrentUser = Depends(get_current_user)):
     try:
         trip = TripAccessService(db).get_trip_for_member(trip_id, user.id)
     except AccessDenied:
         raise HTTPException(status_code=404, detail="Trip not found.") from None
     locations = extract_map_locations(trip)
     return {
-        "trip_id": trip.id,
+        "trip_id": trip["id"],
         "locations": [
-            {**location, "search_url": f"https://www.openstreetmap.org/search?query={quote_plus(location['name'] + ', ' + trip.destination)}"}
+            {**location, "search_url": f"https://www.openstreetmap.org/search?query={quote_plus(location['name'] + ', ' + trip['destination'])}"}
             for location in locations
         ],
     }
@@ -120,7 +119,7 @@ def get_trip_map(trip_id: str, db: Session = Depends(get_db), user: User = Depen
 
 def _route_locations(trip) -> list:
     try:
-        return extract_itinerary_locations(trip.itinerary)
+        return extract_itinerary_locations(trip.get("itinerary"))
     except InvalidRouteLocations as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -136,7 +135,7 @@ def _route_location_payload(location) -> dict:
 
 
 @router.get("/trips/{trip_id}/route/locations")
-def get_route_locations(trip_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def get_route_locations(trip_id: str, db: Database = Depends(get_database), user: CurrentUser = Depends(get_current_user)):
     try:
         trip = TripAccessService(db).get_trip_for_member(trip_id, user.id)
     except AccessDenied:
@@ -156,8 +155,8 @@ def get_route_locations(trip_id: str, db: Session = Depends(get_db), user: User 
 def optimize_trip_route(
     trip_id: str,
     payload: RouteOptimizationRequest,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    db: Database = Depends(get_database),
+    user: CurrentUser = Depends(get_current_user),
 ):
     try:
         trip = TripAccessService(db).get_trip_for_member(trip_id, user.id)
@@ -225,31 +224,31 @@ def optimize_trip_route(
 def optimize_trip_itinerary_csp(
     trip_id: str,
     payload: ItineraryCSPRequest,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    db: Database = Depends(get_database),
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     _ = payload
     try:
         trip = TripAccessService(db).get_trip_for_member(trip_id, user.id)
     except AccessDenied:
         raise HTTPException(status_code=404, detail="Trip not found.") from None
-    return build_itinerary_csp_result(trip.duration, trip.itinerary)
+    return build_itinerary_csp_result(trip["duration"], trip["itinerary"])
 
 
 @router.post("/trips/{trip_id}/itinerary/ga-optimize")
 def optimize_trip_itinerary_ga(
     trip_id: str,
     payload: ItineraryGARequest,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    db: Database = Depends(get_database),
+    user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     try:
         trip = TripAccessService(db).get_trip_for_member(trip_id, user.id)
     except AccessDenied:
         raise HTTPException(status_code=404, detail="Trip not found.") from None
     return build_itinerary_ga_result(
-        trip.duration,
-        trip.itinerary,
+        trip["duration"],
+        trip["itinerary"],
         population_size=payload.population_size,
         generations=payload.generations,
         mutation_rate=payload.mutation_rate,

@@ -1,93 +1,55 @@
-const API_BASE = '/api/v1'
-const LEGACY_PLAN_ERROR = 'Unable to generate the travel plan at this time. Please try again.'
+import { getSupabaseClient } from '../auth/supabase.js'
+
+const processEnvironment = typeof process === 'undefined' ? {} : process.env
+const API_BASE_URL = (((import.meta.env || {}).VITE_API_BASE_URL || processEnvironment.VITE_API_BASE_URL) || '').replace(/\/+$/, '')
 const PREFERENCE_ERROR = 'Unable to save your preferences. Please try again.'
 const PREFERENCE_VALIDATION_ERROR = 'Some preference values are invalid. Please check your selections.'
 const PREFERENCE_FIELDS = ['travel_style', 'interests', 'things_to_avoid', 'budget_preference', 'hotel_preference', 'food_preference', 'preferred_destinations', 'preferred_budget_min', 'preferred_budget_max', 'preferred_currency', 'preferred_trip_duration', 'is_domestic']
-const TOKEN_KEY = 'pack-go-token'
-const REFRESH_KEY = 'pack-go-refresh-token'
-let refreshRequest
 
-function refreshAccessToken() {
-  if (!refreshRequest) {
-    refreshRequest = (async () => {
-      const refreshToken = localStorage.getItem(REFRESH_KEY)
-      if (!refreshToken) throw new Error('No refresh token is available.')
-      const response = await fetch(`${API_BASE}/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refreshToken }),
-      })
-      const result = await response.json().catch(() => ({}))
-      if (!response.ok || !result.access_token || !result.refresh_token) {
-        throw new Error('Unable to refresh the session.')
-      }
-      localStorage.setItem(TOKEN_KEY, result.access_token)
-      localStorage.setItem(REFRESH_KEY, result.refresh_token)
-      localStorage.setItem('pack-go-user', JSON.stringify(result.user))
-      window.dispatchEvent(Object.assign(new Event('pack-go-session-refreshed'), { detail: result }))
-      return result.access_token
-    })().finally(() => { refreshRequest = null })
-  }
-  return refreshRequest
-}
-
-function authErrorMessage(path, detail) {
-  if (Array.isArray(detail)) {
-    const first = detail[0] || {}
-    return `${first.loc?.at(-1) || 'request'}: ${first.msg || 'Invalid authentication request.'}`
-  }
-  if (detail && detail !== LEGACY_PLAN_ERROR) return detail
-  if (path === '/auth/register') return 'Unable to create your account right now. Please try again.'
-  if (path === '/auth/login') return "Email or password doesn't look right. Please try again."
-  return 'Unable to complete authentication right now. Please try again.'
+export function apiUrl(path) {
+  return `${API_BASE_URL}${path}`
 }
 
 async function request(path, options = {}) {
   const isFormData = options.body instanceof FormData
-  const send = (token) => fetch(`${API_BASE}${path}`, {
+  const send = (token) => fetch(apiUrl(`/api/v1${path}`), {
     ...options,
     headers: {
-      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
-      ...(token && !options.headers?.Authorization ? { Authorization: `Bearer ${token}` } : {}),
+      ...(!isFormData && options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
-      ...(token && options.headers?.Authorization ? { Authorization: `Bearer ${token}` } : {}),
     },
   })
-  let response = await send(localStorage.getItem(TOKEN_KEY))
-  if (response.status === 401 && !path.startsWith('/auth/')) {
-    try {
-      response = await send(await refreshAccessToken())
-    } catch {
-      window.dispatchEvent(new Event('pack-go-session-expired'))
+  const supabase = getSupabaseClient()
+  const { data, error } = await supabase.auth.getSession()
+  if (error) throw error
+  let response = await send(data.session?.access_token)
+  if (response.status === 401 && data.session) {
+    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession()
+    if (refreshError) {
+      const { error: signOutError } = await supabase.auth.signOut()
+      if (signOutError) throw signOutError
+    } else if (refreshed.session?.access_token) {
+      response = await send(refreshed.session.access_token)
     }
   }
   const body = await response.json().catch(() => ({}))
   if (!response.ok) {
-    if (response.status === 401 && !path.startsWith('/auth/')) window.dispatchEvent(new Event('pack-go-session-expired'))
     const detail = body.detail || body.error
-    const message = path.startsWith('/auth/')
-      ? authErrorMessage(path, detail)
-      : path.startsWith('/users/me/preferences') && response.status === 422
-        ? PREFERENCE_VALIDATION_ERROR
-      : path.startsWith('/users/me/preferences') && (!detail || detail === LEGACY_PLAN_ERROR)
+    const message = path.startsWith('/users/me/preferences') && response.status === 422
+      ? PREFERENCE_VALIDATION_ERROR
+      : path.startsWith('/users/me/preferences') && !detail
         ? PREFERENCE_ERROR
         : detail || 'Something went wrong. Please try again.'
-    const error = new Error(message)
-    error.status = response.status
-    throw error
+    const apiError = new Error(message)
+    apiError.status = response.status
+    throw apiError
   }
   return body
 }
 
 export const authApi = {
-  register: (payload) => request('/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
-  login: (payload) => request('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
-  refresh: (refreshToken) => request('/auth/refresh', { method: 'POST', body: JSON.stringify({ refresh_token: refreshToken }) }),
-  logout: (refreshToken) => request('/auth/logout', { method: 'POST', body: JSON.stringify({ refresh_token: refreshToken }) }),
-  me: (token) => request('/users/me', { headers: { Authorization: `Bearer ${token}` } }),
-  verifyEmail: (token) => request('/auth/verify-email', { method: 'POST', body: JSON.stringify({ token }) }),
-  forgotPassword: (email) => request('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
-  resetPassword: (token, password) => request('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) }),
+  me: () => request('/users/me'),
 }
 
 export const tripsApi = {

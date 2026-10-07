@@ -2,20 +2,19 @@ from __future__ import annotations
 
 import os
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 
 from agent.knowledge_agent import knowledge_agent_node
-from api.v1.dependencies import get_current_admin, get_current_user
-from database import KnowledgeSource, User
-from database.connection import get_db
+from api.v1.dependencies import CurrentUser, get_current_admin, get_current_user
+from database.mongodb import get_database
 from rag.ingestion import ingest_pdf
 from rag.vector_store import get_knowledge_collection
-
 
 router = APIRouter(prefix="/api/v1/admin/knowledge", tags=["Admin Knowledge"])
 user_router = APIRouter(prefix="/api/v1/knowledge", tags=["User Knowledge"])
@@ -43,38 +42,40 @@ def _validate_filename(filename: str | None) -> str:
     return safe_name
 
 
-def _serialize(source: KnowledgeSource) -> dict:
+def _serialize(source: dict) -> dict:
     return {
-        "id": source.id,
-        "document_id": source.document_id,
-        "filename": source.filename,
-        "display_name": source.display_name,
-        "destination": source.destination,
-        "category": source.category,
-        "document_type": source.document_type,
-        "chunk_count": source.chunk_count,
-        "page_count": source.page_count,
-        "status": source.status,
-        "created_at": source.created_at,
-        "updated_at": source.updated_at,
+        "id": source["id"],
+        "document_id": source["document_id"],
+        "filename": source["filename"],
+        "display_name": source["display_name"],
+        "destination": source["destination"],
+        "category": source["category"],
+        "document_type": source["document_type"],
+        "chunk_count": source["chunk_count"],
+        "page_count": source["page_count"],
+        "status": source["status"],
+        "created_at": source["created_at"],
+        "updated_at": source["updated_at"],
     }
 
 
-def _serialize_user(source: KnowledgeSource) -> dict:
-    return {
-        "id": source.id,
-        "document_id": source.document_id,
-        "filename": source.filename,
-        "display_name": source.display_name,
-        "destination": source.destination,
-        "category": source.category,
-        "document_type": source.document_type,
-        "chunk_count": source.chunk_count,
-        "page_count": source.page_count,
-        "status": source.status,
-        "created_at": source.created_at,
-        "updated_at": source.updated_at,
-    }
+def _source_query(
+    search: str | None,
+    destination: str | None,
+    category: str | None,
+    document_type: str | None,
+) -> dict:
+    query: dict = {}
+    if search and search.strip():
+        query["display_name"] = {"$regex": re.escape(search.strip()), "$options": "i"}
+    for field, value in (
+        ("destination", destination),
+        ("category", category),
+        ("document_type", document_type),
+    ):
+        if value:
+            query[field] = value
+    return query
 
 
 def _require_metadata(display_name: str, destination: str, category: str, document_type: str) -> None:
@@ -84,35 +85,30 @@ def _require_metadata(display_name: str, destination: str, category: str, docume
 
 @user_router.get("")
 def list_user_documents(
-    db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    db: Database = Depends(get_database),
+    _: CurrentUser = Depends(get_current_user),
     search: str | None = None,
     destination: str | None = None,
     category: str | None = None,
     document_type: str | None = None,
 ):
-    query = db.query(KnowledgeSource)
-    if search:
-        query = query.filter(KnowledgeSource.display_name.ilike(f"%{search.strip()}%"))
-    for field, value in ((KnowledgeSource.destination, destination), (KnowledgeSource.category, category), (KnowledgeSource.document_type, document_type)):
-        if value:
-            query = query.filter(field == value)
-    return [_serialize_user(source) for source in query.order_by(KnowledgeSource.created_at.desc()).all()]
+    sources = db.knowledge_sources.find(
+        _source_query(search, destination, category, document_type)
+    ).sort("created_at", -1)
+    return [_serialize(source) for source in sources]
 
 
 @user_router.post("/ask")
 def ask_user_knowledge(
     request: KnowledgeAskRequest,
-    _: User = Depends(get_current_user),
+    _: CurrentUser = Depends(get_current_user),
 ):
-    result = knowledge_agent_node(
-        {
-            "query": request.question,
-            "knowledge_destination": request.destination,
-            "knowledge_category": request.category,
-            "knowledge_document_type": request.document_type,
-        }
-    )
+    result = knowledge_agent_node({
+        "query": request.question,
+        "knowledge_destination": request.destination,
+        "knowledge_category": request.category,
+        "knowledge_document_type": request.document_type,
+    })
     answer = result.get("knowledge_answer")
     if answer is None:
         raise HTTPException(status_code=503, detail=result.get("knowledge_failure", "Knowledge retrieval is unavailable."))
@@ -126,8 +122,8 @@ async def upload_document(
     destination: str = Form(...),
     category: str = Form(...),
     document_type: str = Form(...),
-    db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    db: Database = Depends(get_database),
+    _: CurrentUser = Depends(get_current_admin),
 ):
     filename = _validate_filename(file.filename)
     if file.content_type not in (None, "application/pdf"):
@@ -150,7 +146,9 @@ async def upload_document(
             display_name=display_name.strip(),
             db=db,
         )
-        source = db.query(KnowledgeSource).filter_by(document_id=result["document_id"]).one()
+        source = db.knowledge_sources.find_one({"document_id": result["document_id"]})
+        if source is None:
+            raise RuntimeError("Indexed knowledge metadata was not persisted.")
         return _serialize(source)
     except Exception as exc:
         path.unlink(missing_ok=True)
@@ -159,59 +157,80 @@ async def upload_document(
 
 @router.get("/documents")
 def list_documents(
-    db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin),
+    db: Database = Depends(get_database),
+    _: CurrentUser = Depends(get_current_admin),
     search: str | None = None,
     destination: str | None = None,
     category: str | None = None,
     document_type: str | None = None,
 ):
-    query = db.query(KnowledgeSource)
-    if search:
-        query = query.filter(KnowledgeSource.display_name.ilike(f"%{search.strip()}%"))
-    for field, value in ((KnowledgeSource.destination, destination), (KnowledgeSource.category, category), (KnowledgeSource.document_type, document_type)):
-        if value:
-            query = query.filter(field == value)
-    return [_serialize(source) for source in query.order_by(KnowledgeSource.created_at.desc()).all()]
+    sources = db.knowledge_sources.find(
+        _source_query(search, destination, category, document_type)
+    ).sort("created_at", -1)
+    return [_serialize(source) for source in sources]
 
 
 @router.get("/documents/{source_id}")
-def get_document(source_id: str, db: Session = Depends(get_db), _: User = Depends(get_current_admin)):
-    source = db.get(KnowledgeSource, source_id)
+def get_document(
+    source_id: str,
+    db: Database = Depends(get_database),
+    _: CurrentUser = Depends(get_current_admin),
+):
+    source = db.knowledge_sources.find_one({"_id": source_id})
     if not source:
         raise HTTPException(status_code=404, detail="Knowledge document not found.")
     return _serialize(source)
 
 
 @router.post("/documents/{source_id}/reindex")
-def reindex_document(source_id: str, db: Session = Depends(get_db), _: User = Depends(get_current_admin)):
-    source = db.get(KnowledgeSource, source_id)
+def reindex_document(
+    source_id: str,
+    db: Database = Depends(get_database),
+    _: CurrentUser = Depends(get_current_admin),
+):
+    source = db.knowledge_sources.find_one({"_id": source_id})
     if not source:
         raise HTTPException(status_code=404, detail="Knowledge document not found.")
-    path = Path(source.file_path).resolve()
+    path = Path(source["file_path"]).resolve()
     if path.parent != _storage_root() or not path.is_file():
         raise HTTPException(status_code=422, detail="Stored source file is unavailable.")
-    source.status = "processing"
-    db.commit()
+    db.knowledge_sources.update_one(
+        {"_id": source_id},
+        {"$set": {"status": "processing", "updated_at": datetime.now(UTC)}},
+    )
     try:
-        result = ingest_pdf(path, source.destination, source.category, source.document_type, db=db, display_name=source.display_name)
-        return _serialize(db.query(KnowledgeSource).filter_by(document_id=result["document_id"]).one())
+        result = ingest_pdf(
+            path,
+            source["destination"],
+            source["category"],
+            source["document_type"],
+            db=db,
+            display_name=source["display_name"],
+        )
+        updated = db.knowledge_sources.find_one({"document_id": result["document_id"]})
+        if updated is None:
+            raise RuntimeError("Re-indexed knowledge metadata was not persisted.")
+        return _serialize(updated)
     except Exception as exc:
-        source.status = "failed"
-        db.commit()
+        db.knowledge_sources.update_one(
+            {"_id": source_id},
+            {"$set": {"status": "failed", "updated_at": datetime.now(UTC)}},
+        )
         raise HTTPException(status_code=422, detail="The document could not be re-indexed.") from exc
 
 
 @router.delete("/documents/{source_id}")
-def delete_document(source_id: str, db: Session = Depends(get_db), _: User = Depends(get_current_admin)):
-    source = db.get(KnowledgeSource, source_id)
+def delete_document(
+    source_id: str,
+    db: Database = Depends(get_database),
+    _: CurrentUser = Depends(get_current_admin),
+):
+    source = db.knowledge_sources.find_one({"_id": source_id})
     if not source:
         raise HTTPException(status_code=404, detail="Knowledge document not found.")
-    collection = get_knowledge_collection()
-    collection.delete(where={"document_id": source.document_id})
-    path = Path(source.file_path).resolve()
+    get_knowledge_collection().delete(where={"document_id": source["document_id"]})
+    path = Path(source["file_path"]).resolve()
     if path.parent == _storage_root():
         path.unlink(missing_ok=True)
-    db.delete(source)
-    db.commit()
+    db.knowledge_sources.delete_one({"_id": source_id})
     return {"message": "Knowledge document deleted."}

@@ -9,11 +9,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 
 from agent.agentic_workflow import GraphBuilder, build_final_plan, validate_final_state
 from api.v1.trips import router as api_v1_router
-from api.v1.auth import router as auth_router
 from api.v1.users import router as users_router
 from api.v1.knowledge import router as knowledge_router, user_router as user_knowledge_router
 from api.v1.collaboration import router as collaboration_router
@@ -22,8 +21,8 @@ from api.v1.journal import router as journal_router
 from api.v1.utilities import router as utilities_router
 from api.v1.admin import router as admin_router
 from api.v1.dependencies import get_optional_current_user
-from database import User, UserPreference
-from database.connection import get_db
+from api.v1.dependencies import CurrentUser
+from database.mongodb import get_database
 from services.trip_service import TripService
 from utils.streaming import format_sse_event
 from memory.long_term import LongTermMemory
@@ -47,7 +46,6 @@ def _get_allowed_origins() -> list[str]:
 app = FastAPI(title="PACK & GO API")
 
 app.include_router(api_v1_router)
-app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(knowledge_router)
 app.include_router(user_knowledge_router)
@@ -79,11 +77,6 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def request_validation_exception_handler(request: Request, exc: RequestValidationError):
-    if request.url.path.startswith("/api/v1/auth/"):
-        first_error = exc.errors()[0] if exc.errors() else {}
-        field = first_error.get("loc", ["request"])[-1]
-        message = first_error.get("msg", "Invalid authentication request.")
-        return JSONResponse(status_code=422, content={"error": f"{field}: {message}"})
     if request.url.path.startswith("/api/v1/users/me/preferences"):
         return JSONResponse(status_code=422, content={"error": "Unable to save your preferences. Please check the submitted values."})
     return JSONResponse(status_code=422, content={"error": "Request validation failed."})
@@ -92,12 +85,6 @@ async def request_validation_exception_handler(request: Request, exc: RequestVal
 @app.exception_handler(Exception)
 async def generic_exception_handler(request, exc: Exception):
     logger.exception("Unhandled server error during %s %s", request.method, request.url.path)
-    if request.url.path.startswith("/api/v1/auth/"):
-        message = "Unable to create your account right now. Please try again." if request.url.path.endswith("/register") else "Unable to complete authentication right now. Please try again."
-        return JSONResponse(
-            status_code=500,
-            content={"error": message},
-        )
     message = PREFERENCE_ERROR_MESSAGE if request.url.path.startswith("/api/v1/users/me/preferences") else GENERIC_ERROR_MESSAGE
     return JSONResponse(status_code=500, content={"error": message})
 
@@ -159,33 +146,34 @@ def _knowledge_metadata(answer: object) -> dict[str, object]:
     }
 
 
-def _saved_preferences_context(user: User | None, db: Session) -> dict:
+def _saved_preferences_context(user: CurrentUser | None, db: Database) -> dict:
     if not user:
         return {}
-    preferences = db.query(UserPreference).filter(UserPreference.user_id == user.id).first()
+    profile = db.users.find_one({"_id": user.id}, {"preferences": 1}) or {}
+    preferences = profile.get("preferences")
     if not preferences:
         return {}
     return {
         key: value
         for key, value in {
-            "travel_style": preferences.travel_style,
-            "interests": preferences.interests,
-            "things_to_avoid": preferences.things_to_avoid,
-            "budget_preference": preferences.budget_preference,
-            "hotel_preference": preferences.hotel_preference,
-            "food_preference": preferences.food_preference,
-            "preferred_destinations": preferences.preferred_destinations,
-            "preferred_budget_min": preferences.preferred_budget_min,
-            "preferred_budget_max": preferences.preferred_budget_max,
-            "preferred_currency": preferences.preferred_currency,
-            "preferred_trip_duration": preferences.preferred_trip_duration,
-            "is_domestic": preferences.is_domestic,
+            "travel_style": preferences.get("travel_style"),
+            "interests": preferences.get("interests"),
+            "things_to_avoid": preferences.get("things_to_avoid"),
+            "budget_preference": preferences.get("budget_preference"),
+            "hotel_preference": preferences.get("hotel_preference"),
+            "food_preference": preferences.get("food_preference"),
+            "preferred_destinations": preferences.get("preferred_destinations"),
+            "preferred_budget_min": preferences.get("preferred_budget_min"),
+            "preferred_budget_max": preferences.get("preferred_budget_max"),
+            "preferred_currency": preferences.get("preferred_currency"),
+            "preferred_trip_duration": preferences.get("preferred_trip_duration"),
+            "is_domestic": preferences.get("is_domestic"),
         }.items()
         if value not in (None, [], {})
     }
 
 @app.post("/plan")
-async def plan_trip_sync(request: PlanRequest, user: User | None = Depends(get_optional_current_user), db: Session = Depends(get_db)):
+async def plan_trip_sync(request: PlanRequest, user: CurrentUser | None = Depends(get_optional_current_user), db: Database = Depends(get_database)):
     """Backward compatible synchronous endpoint."""
     try:
         thread_id = request.thread_id or str(uuid.uuid4())
@@ -265,7 +253,7 @@ async def get_graph_png():
         return JSONResponse(status_code=500, content={"error": GENERIC_ERROR_MESSAGE})
 
 @app.post("/plan/stream")
-async def plan_trip_stream(request: PlanRequest, user: User | None = Depends(get_optional_current_user), db: Session = Depends(get_db)):
+async def plan_trip_stream(request: PlanRequest, user: CurrentUser | None = Depends(get_optional_current_user), db: Database = Depends(get_database)):
     """SSE Streaming endpoint for live updates."""
     thread_id = request.thread_id or str(uuid.uuid4())
     
